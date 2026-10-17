@@ -24,7 +24,9 @@ import {
   calculateStaffVariance
 } from '@/lib/staffStrengthService';
 import { submitInstituteHeadReview, mergeApplicationOverrides } from '@/lib/workflowService';
+import { numberToWordsINR } from '@/lib/numberToWords';
 import {
+  Award,
   Building2,
   GraduationCap,
   ShieldCheck,
@@ -108,7 +110,7 @@ export default function InstitutePortalPage() {
   const [portalSection, setPortalSection] = useState<'review' | 'matrix'>('review');
   const [forwardedApplications, setForwardedApplications] = useState<Application[]>([]);
   const [selectedReviewApp, setSelectedReviewApp] = useState<Application | null>(null);
-  const [reviewStatusFilter, setReviewStatusFilter] = useState<'all' | 'pending' | 'selected' | 'hold' | 'rejected'>('all');
+  const [reviewStatusFilter, setReviewStatusFilter] = useState<'all' | 'pending' | 'selected' | 'management_approved' | 'hold' | 'rejected'>('all');
   const [candidateSearchQuery, setCandidateSearchQuery] = useState('');
   const [previewDoc, setPreviewDoc] = useState<{ title: string; url: string } | null>(null);
   const [evaluationFiles, setEvaluationFiles] = useState<Record<string, { report?: File; signature?: File }>>({});
@@ -145,6 +147,7 @@ export default function InstitutePortalPage() {
     if (
       filterParam === 'pending' ||
       filterParam === 'selected' ||
+      filterParam === 'management_approved' ||
       filterParam === 'hold' ||
       filterParam === 'rejected' ||
       filterParam === 'all'
@@ -620,11 +623,13 @@ export default function InstitutePortalPage() {
     if (
       reviewStatusFilter === 'selected' &&
       app.status !== 'selected_recommended' &&
+      app.status !== 'management_approved' &&
       app.status !== 'ready_for_physical_interview' &&
       app.institute_recommendation !== 'selected' &&
       app.institute_recommendation !== 'recommended'
     )
       return false;
+    if (reviewStatusFilter === 'management_approved' && app.status !== 'management_approved') return false;
     if (
       reviewStatusFilter === 'hold' &&
       app.status !== 'hold' &&
@@ -889,7 +894,7 @@ export default function InstitutePortalPage() {
           {portalSection === 'review' && (
             <section className="space-y-6 print:hidden">
               {/* KPI Summary Cards */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                 {/* 1. Total Forwarded */}
                 <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm flex items-center justify-between">
                   <div className="space-y-1">
@@ -899,7 +904,7 @@ export default function InstitutePortalPage() {
                     <span className="text-2xl font-black text-slate-900">
                       {forwardedApplications.length}
                     </span>
-                    <p className="text-[10px] text-slate-400">Applications assigned to your unit</p>
+                    <p className="text-[10px] text-slate-400">Applications assigned</p>
                   </div>
                   <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
                     <FileText className="w-6 h-6" />
@@ -915,18 +920,18 @@ export default function InstitutePortalPage() {
                     <span className="text-2xl font-black text-amber-900">
                       {forwardedApplications.filter((a) => a.status === 'forwarded_to_institute').length}
                     </span>
-                    <p className="text-[10px] text-amber-600 font-medium">Awaiting on-campus interview</p>
+                    <p className="text-[10px] text-amber-600 font-medium">Awaiting evaluation</p>
                   </div>
                   <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
                     <Clock className="w-6 h-6" />
                   </div>
                 </div>
 
-                {/* 3. Selected / Recommended */}
+                {/* 3. Selected / Recommended by College */}
                 <div className="bg-white rounded-3xl p-5 border border-emerald-200/80 shadow-sm flex items-center justify-between bg-gradient-to-br from-white to-emerald-50/30">
                   <div className="space-y-1">
                     <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider block">
-                      Selected / Recommended
+                      Recommended
                     </span>
                     <span className="text-2xl font-black text-emerald-900">
                       {
@@ -939,14 +944,30 @@ export default function InstitutePortalPage() {
                         ).length
                       }
                     </span>
-                    <p className="text-[10px] text-emerald-600 font-medium">Positive selection logged</p>
+                    <p className="text-[10px] text-emerald-600 font-medium">Recommended by unit</p>
                   </div>
                   <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
                     <CheckCircle2 className="w-6 h-6" />
                   </div>
                 </div>
 
-                {/* 4. On Hold / Rejected */}
+                {/* 4. Formal Management Approval Granted */}
+                <div className="bg-white rounded-3xl p-5 border border-blue-200 shadow-sm flex items-center justify-between bg-gradient-to-br from-white to-blue-50/40">
+                  <div className="space-y-1">
+                    <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider block">
+                      Formal Approval
+                    </span>
+                    <span className="text-2xl font-black text-blue-950">
+                      {forwardedApplications.filter((a) => a.status === 'management_approved').length}
+                    </span>
+                    <p className="text-[10px] text-blue-600 font-medium">Central HR & Mgmt cleared</p>
+                  </div>
+                  <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+                    <Award className="w-6 h-6" />
+                  </div>
+                </div>
+
+                {/* 5. On Hold / Rejected */}
                 <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm flex items-center justify-between">
                   <div className="space-y-1">
                     <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
@@ -1041,11 +1062,34 @@ export default function InstitutePortalPage() {
                         forwardedApplications.filter(
                           (a) =>
                             a.status === 'selected_recommended' ||
+                            a.status === 'management_approved' ||
                             a.status === 'ready_for_physical_interview' ||
                             a.institute_recommendation === 'selected' ||
                             a.institute_recommendation === 'recommended'
                         ).length
                       }
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setReviewStatusFilter('management_approved');
+                      if (typeof window !== 'undefined') {
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('filter', 'management_approved');
+                        window.history.replaceState(null, '', url.pathname + (url.searchParams.toString() ? `?${url.searchParams.toString()}` : ''));
+                        window.dispatchEvent(new Event('popstate'));
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                      reviewStatusFilter === 'management_approved'
+                        ? 'bg-blue-700 text-white shadow-sm'
+                        : 'bg-blue-50 text-blue-800 hover:bg-blue-100'
+                    }`}
+                  >
+                    <Award className="w-3.5 h-3.5" />
+                    <span>Formal Approval Granted</span>
+                    <span className="px-1.5 py-0.2 bg-blue-700/20 rounded-md text-[10px]">
+                      {forwardedApplications.filter((a) => a.status === 'management_approved').length}
                     </span>
                   </button>
                   <button
@@ -1144,6 +1188,7 @@ export default function InstitutePortalPage() {
               ) : (
                 <div className="space-y-4">
                   {filteredCandidates.map((app) => {
+                    const isMgmtApproved = app.status === 'management_approved';
                     const isPendingReview = app.status === 'forwarded_to_institute';
                     const isSelected =
                       app.status === 'selected_recommended' ||
@@ -1157,7 +1202,9 @@ export default function InstitutePortalPage() {
                       <div
                         key={app.id}
                         className={`bg-white rounded-3xl p-5 sm:p-6 border transition shadow-sm hover:shadow-md ${
-                          isPendingReview
+                          isMgmtApproved
+                            ? 'border-blue-400 ring-2 ring-blue-100 bg-gradient-to-br from-white via-blue-50/15 to-indigo-50/20'
+                            : isPendingReview
                             ? 'border-amber-300 ring-1 ring-amber-200/50'
                             : isSelected
                             ? 'border-emerald-300 ring-1 ring-emerald-100'
@@ -1183,7 +1230,19 @@ export default function InstitutePortalPage() {
                                     <Clock className="w-3 h-3" /> Action Required: Conduct Interview & Evaluate
                                   </span>
                                 )}
-                                {isSelected && (
+                                {isMgmtApproved && (
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-900 border border-blue-400 flex items-center gap-1 shadow-2xs">
+                                      <Award className="w-3.5 h-3.5 text-blue-700" /> Formal Management & Central HR Appointment Approval Granted
+                                    </span>
+                                    {app.appointment_order_workflow_initiated && (
+                                      <span className="px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                                        <CheckCircle2 className="w-3 h-3 text-emerald-700" /> Appointment Order: Initiated
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                                {isSelected && !isMgmtApproved && (
                                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 shadow-xs">
                                     <CheckCircle2 className="w-3 h-3 text-emerald-700" /> Selected / Recommended
                                   </span>
@@ -1203,7 +1262,7 @@ export default function InstitutePortalPage() {
                               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
                                 <span className="font-bold text-indigo-700 flex items-center gap-1">
                                   <Briefcase className="w-3.5 h-3.5" />
-                                  {app.posts?.title || app.custom_post_title || 'General Post'}
+                                  {app.confirmed_designation || app.posts?.title || app.custom_post_title || 'General Post'}
                                 </span>
                                 {app.program_stream && (
                                   <span className="text-slate-500 font-medium">
@@ -1231,18 +1290,67 @@ export default function InstitutePortalPage() {
                             <button
                               onClick={() => openReviewModal(app)}
                               className={`px-5 py-2.5 rounded-2xl text-xs font-black shadow-md transition flex items-center gap-2 ${
-                                isPendingReview
+                                isMgmtApproved
+                                  ? 'bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-800 hover:to-indigo-800 text-white'
+                                  : isPendingReview
                                   ? 'bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white'
                                   : isSelected
                                   ? 'bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white'
                                   : 'bg-indigo-600 hover:bg-indigo-700 text-white'
                               }`}
                             >
-                              <Edit3 className="w-4 h-4" />
-                              <span>{isPendingReview ? 'Conduct Interview & Evaluate' : 'Update Interview & Evaluation'}</span>
+                              {isMgmtApproved ? <Award className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}
+                              <span>
+                                {isMgmtApproved
+                                  ? 'View Approved Appointment Dossier'
+                                  : isPendingReview
+                                  ? 'Conduct Interview & Evaluate'
+                                  : 'Update Interview & Evaluation'}
+                              </span>
                             </button>
                           </div>
                         </div>
+
+                        {/* Formal Management Approved Appointment Instructions Summary Card */}
+                        {isMgmtApproved && (
+                          <div className="mt-4 p-4 rounded-2xl bg-gradient-to-r from-blue-50/90 to-indigo-50/90 border border-blue-300 text-xs space-y-2.5">
+                            <div className="flex items-center justify-between border-b border-blue-200/80 pb-2">
+                              <span className="font-black text-blue-950 flex items-center gap-1.5 uppercase tracking-wider text-[10.5px]">
+                                <Award className="w-4 h-4 text-blue-700" />
+                                Official Appointment Terms & Joining Instructions
+                              </span>
+                              <span className="text-[10px] text-blue-700 font-bold bg-white px-2 py-0.5 rounded-md border border-blue-200">
+                                Approved: {new Date(app.management_approved_at || Date.now()).toLocaleDateString('en-GB')}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                              <div className="bg-white p-2.5 rounded-xl border border-blue-200">
+                                <span className="text-[9.5px] font-bold uppercase text-slate-500 block">Designation</span>
+                                <span className="font-bold text-slate-900 block truncate mt-0.5">{app.confirmed_designation || app.posts?.title || 'Faculty'}</span>
+                              </div>
+                              <div className="bg-white p-2.5 rounded-xl border border-blue-200">
+                                <span className="text-[9.5px] font-bold uppercase text-slate-500 block">Date of Joining</span>
+                                <span className="font-bold text-slate-900 block truncate mt-0.5 flex items-center gap-1">
+                                  <Calendar className="w-3 h-3 text-sky-600" />
+                                  {app.joining_date ? new Date(app.joining_date).toLocaleDateString('en-GB') : 'As per order'}
+                                </span>
+                              </div>
+                              <div className="bg-emerald-50 p-2.5 rounded-xl border border-emerald-300">
+                                <span className="text-[9.5px] font-black uppercase text-emerald-800 block">Agreed Total Salary</span>
+                                <span className="font-black text-emerald-950 block mt-0.5 text-xs">₹ {Number(app.agreed_total_salary || 0).toLocaleString('en-IN')}</span>
+                              </div>
+                              <div className="bg-white p-2.5 rounded-xl border border-blue-200">
+                                <span className="text-[9.5px] font-bold uppercase text-slate-500 block">Bond / Compliance</span>
+                                <span className="font-bold text-slate-900 block truncate mt-0.5">{app.mandatory_bond_details || 'Standard'}</span>
+                              </div>
+                            </div>
+                            {(app.appointment_instructions || app.management_approval_remarks) && (
+                              <p className="text-[11px] text-slate-700 italic bg-white/80 p-2.5 rounded-xl border border-blue-100 leading-snug">
+                                "{app.appointment_instructions || app.management_approval_remarks}"
+                              </p>
+                            )}
+                          </div>
+                        )}
 
                         {/* Central HR Remarks & Institute Evaluation Callout */}
                         <div className="mt-4 pt-3.5 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
@@ -2492,6 +2600,148 @@ export default function InstitutePortalPage() {
                   {/* LEFT COLUMN: CANDIDATE DOSSIER & VERIFIED CREDENTIALS (7 COLS) */}
                   <div className="lg:col-span-7 print:col-span-12 space-y-5">
                     
+                    {/* 0. Formal Management & Central HR Appointment Approval Dossier Card */}
+                    {(selectedReviewApp.status === 'management_approved' || selectedReviewApp.management_approved_at) && (
+                      <div className="bg-gradient-to-br from-emerald-50 via-teal-50 to-white p-5 rounded-2xl border-2 border-emerald-300 shadow-sm space-y-3.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200/80 pb-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow">
+                              <Award className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <span className="text-xs font-black text-emerald-950 uppercase tracking-tight block">
+                                Formal Management & Central HR Appointment Approval Granted
+                              </span>
+                              <span className="text-[11px] text-emerald-700 font-semibold block">
+                                Sanstha Central Management Direct Approval & Official Directives
+                              </span>
+                            </div>
+                          </div>
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            Formal Management Approval Granted
+                          </span>
+                        </div>
+
+                        {/* Downstream Appointment Order Processing Flag */}
+                        <div className="flex items-center justify-between p-2.5 bg-indigo-50 border border-indigo-200 rounded-xl text-xs">
+                          <span className="font-bold text-indigo-900 flex items-center gap-1.5">
+                            <Sparkles className="w-4 h-4 text-indigo-600" />
+                            Official Appointment Order Workflow:
+                          </span>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-indigo-100 text-indigo-800 font-extrabold border border-indigo-200">
+                            <Clock className="w-3.5 h-3.5" />
+                            {selectedReviewApp.appointment_order_status === 'order_generated'
+                              ? 'Official Appointment Order Generated'
+                              : 'Initiated & Flagged for Appointment Section'}
+                          </span>
+                        </div>
+
+                        {/* Structured Administrative Terms & Instructions Grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                          <div className="bg-white p-3 rounded-xl border border-emerald-100 shadow-2xs">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase block tracking-wider">
+                              Confirmed Designation
+                            </span>
+                            <span className="font-black text-slate-900 block mt-0.5 text-xs">
+                              {selectedReviewApp.confirmed_designation ||
+                                selectedReviewApp.posts?.title ||
+                                selectedReviewApp.custom_post_title ||
+                                'Confirmed Post'}
+                            </span>
+                          </div>
+
+                          <div className="bg-white p-3 rounded-xl border border-emerald-100 shadow-2xs">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase block tracking-wider">
+                              Candidate Date of Joining
+                            </span>
+                            <span className="font-black text-emerald-800 block mt-0.5 text-xs flex items-center gap-1">
+                              <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                              {selectedReviewApp.joining_date
+                                ? new Date(selectedReviewApp.joining_date).toLocaleDateString('en-IN', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    year: 'numeric',
+                                  })
+                                : 'Immediate / As per Sanstha Norms'}
+                            </span>
+                          </div>
+
+                          <div className="bg-emerald-50/70 p-3 rounded-xl border border-emerald-200 sm:col-span-2">
+                            <span className="text-[10px] font-black text-emerald-900 uppercase block tracking-wider">
+                              Agreed Total Salary Amount (Compulsory Mandate)
+                            </span>
+                            <div className="flex flex-wrap items-baseline gap-2 mt-0.5">
+                              <span className="text-base font-black text-emerald-950 font-mono">
+                                ₹{Number(selectedReviewApp.agreed_total_salary || 0).toLocaleString('en-IN')}
+                                <span className="text-xs font-semibold text-slate-500 font-sans"> / Month</span>
+                              </span>
+                              {selectedReviewApp.agreed_total_salary ? (
+                                <span className="text-xs font-bold text-emerald-800 italic">
+                                  ({numberToWordsINR(Number(selectedReviewApp.agreed_total_salary))})
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          <div className="bg-white p-3 rounded-xl border border-emerald-100 shadow-2xs">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase block tracking-wider">
+                              Pay Scale & Basic Pay
+                            </span>
+                            <span className="font-bold text-slate-900 block mt-0.5">
+                              {selectedReviewApp.pay_scale || 'Sanstha Consolidated / AICTE Scale'}
+                            </span>
+                            {selectedReviewApp.basic_pay ? (
+                              <span className="text-[10.5px] font-semibold text-slate-600 block mt-0.5 font-mono">
+                                Basic Pay: ₹{Number(selectedReviewApp.basic_pay).toLocaleString('en-IN')}
+                              </span>
+                            ) : null}
+                          </div>
+
+                          <div className="bg-white p-3 rounded-xl border border-emerald-100 shadow-2xs">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase block tracking-wider">
+                              Mandatory Bond Submissions & Compliance
+                            </span>
+                            <span className="font-semibold text-slate-800 block mt-0.5">
+                              {selectedReviewApp.mandatory_bond_details || 'Standard Sanstha Service Agreement'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Important Instructions & Remarks */}
+                        {selectedReviewApp.appointment_instructions && (
+                          <div className="bg-white p-3 rounded-xl border border-emerald-200 shadow-2xs space-y-1">
+                            <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider block">
+                              Additional Administrative Instructions & Directives
+                            </span>
+                            <p className="text-xs text-slate-800 font-medium leading-relaxed bg-amber-50/50 p-2.5 rounded-lg border border-amber-200">
+                              {selectedReviewApp.appointment_instructions}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Audit Trail & Propagation Metadata */}
+                        <div className="pt-2 border-t border-emerald-200/60 flex flex-wrap items-center justify-between text-[10.5px] text-slate-600 gap-1.5">
+                          <span>
+                            Authorized by: <strong>{selectedReviewApp.management_approved_by || 'Central Management & Head HR'}</strong>
+                            {selectedReviewApp.management_approved_at && (
+                              <> • {new Date(selectedReviewApp.management_approved_at).toLocaleString('en-IN', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}</>
+                            )}
+                          </span>
+                          <span className="text-emerald-700 font-bold flex items-center gap-1">
+                            <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                            Pushed to Institute Portal & Appointment Section
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
                     {/* 1. Central HR Pre-screening Dossier Callout */}
                     <div className="bg-indigo-50/70 p-4 rounded-2xl border border-indigo-100 space-y-1.5">
                       <div className="flex items-center justify-between text-[11px] font-bold text-indigo-900 uppercase tracking-wider">
@@ -2739,18 +2989,139 @@ export default function InstitutePortalPage() {
 
                   {/* RIGHT COLUMN: INSTITUTE HEAD PHYSICAL INTERVIEW & EVALUATION FORM (5 COLS) */}
                   <div className="lg:col-span-5 space-y-4 no-print">
-                    <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200 space-y-4">
-                      <div>
-                        <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight flex items-center gap-1.5">
-                          <CheckCircle className="w-4 h-4 text-sky-600" />
-                          Campus Physical Interview & Evaluation
-                        </h4>
-                        <p className="text-[11px] text-slate-500">
-                          Record interview performance, verify original certificates, and assign final recommendation.
-                        </p>
-                      </div>
+                    {selectedReviewApp.status === 'management_approved' ? (
+                      <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-emerald-200 space-y-4">
+                        <div className="flex items-start justify-between gap-2 border-b border-emerald-100 pb-3">
+                          <div>
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10.5px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              Approval Finalized & Record Locked
+                            </span>
+                            <h4 className="text-sm font-black text-slate-900 mt-1 uppercase tracking-tight">
+                              Campus Evaluation & Sanstha Approval
+                            </h4>
+                          </div>
+                        </div>
 
-                      <form onSubmit={handleSubmitReview} className="space-y-4 text-xs">
+                        <div className="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-200 text-xs space-y-2">
+                          <p className="font-extrabold text-emerald-950 flex items-center gap-1.5">
+                            <Award className="w-4 h-4 text-emerald-600" />
+                            Formal Management Approval Granted
+                          </p>
+                          <p className="text-emerald-900 leading-relaxed text-[11px]">
+                            Central Management & Central HR have granted formal appointment approval. The candidate dossier has been forwarded to the Appointment & Recruitment Section for official appointment order issuance.
+                          </p>
+                          {role === 'admin_head_hr' && (
+                            <Link
+                              href="/appointment"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white text-[11px] font-bold shadow-2xs mt-1"
+                            >
+                              <Award className="w-3.5 h-3.5" />
+                              Open Central Appointment &amp; Recruitment Section
+                            </Link>
+                          )}
+                        </div>
+
+                        {/* Physical Interview Record Review */}
+                        <div className="p-3.5 bg-white rounded-2xl border border-slate-200 text-xs space-y-2.5">
+                          <span className="font-black text-slate-900 uppercase tracking-wider text-[10px] flex items-center gap-1.5 text-slate-700">
+                            <Calendar className="w-3.5 h-3.5 text-sky-600" />
+                            Campus Physical Interview Summary
+                          </span>
+                          <div className="space-y-1.5 text-[11px]">
+                            <div>
+                              <span className="text-slate-400 block font-bold uppercase text-[9.5px]">Interview Date & Venue</span>
+                              <span className="font-bold text-slate-800">
+                                {selectedReviewApp.interview_conducted_date ? new Date(selectedReviewApp.interview_conducted_date).toLocaleString('en-IN') : 'Conducted'}
+                                {selectedReviewApp.interview_venue && ` • ${selectedReviewApp.interview_venue}`}
+                              </span>
+                            </div>
+                            {selectedReviewApp.interview_panel_members && (
+                              <div>
+                                <span className="text-slate-400 block font-bold uppercase text-[9.5px]">Panel Members</span>
+                                <span className="text-slate-700 font-medium">{selectedReviewApp.interview_panel_members}</span>
+                              </div>
+                            )}
+                            <div>
+                              <span className="text-slate-400 block font-bold uppercase text-[9.5px]">Institute Head Recommendation</span>
+                              <span className="font-bold text-emerald-700 capitalize">
+                                {selectedReviewApp.institute_recommendation === 'selected' || selectedReviewApp.institute_recommendation === 'recommended'
+                                  ? 'Selected / Recommended for Sanctioned Post'
+                                  : selectedReviewApp.institute_recommendation || 'Selected'}
+                              </span>
+                            </div>
+                            {selectedReviewApp.institute_remarks && (
+                              <div>
+                                <span className="text-slate-400 block font-bold uppercase text-[9.5px]">Principal / Head Remarks</span>
+                                <p className="text-slate-700 italic bg-slate-50 p-2 rounded-lg border border-slate-200 mt-0.5">
+                                  "{selectedReviewApp.institute_remarks}"
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Documents check */}
+                        {(selectedReviewApp.interview_evaluation_report_url || selectedReviewApp.head_signature_url) && (
+                          <div className="p-3.5 bg-white rounded-2xl border border-slate-200 text-xs space-y-2">
+                            <span className="font-black text-slate-800 uppercase tracking-wider text-[10px] block">
+                              Signed Evaluation Documents
+                            </span>
+                            <div className="flex flex-col gap-1.5">
+                              {selectedReviewApp.interview_evaluation_report_url && (
+                                <a
+                                  href={selectedReviewApp.interview_evaluation_report_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-xs font-bold text-sky-700 hover:text-sky-900 underline flex items-center gap-1"
+                                >
+                                  <FileText className="w-3.5 h-3.5" /> View Signed Interview Evaluation Report
+                                </a>
+                              )}
+                              {selectedReviewApp.head_signature_url && (
+                                <a
+                                  href={selectedReviewApp.head_signature_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-xs font-bold text-sky-700 hover:text-sky-900 underline flex items-center gap-1"
+                                >
+                                  <ShieldCheck className="w-3.5 h-3.5" /> View Head of Institute Signature
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
+                          <button
+                            type="button"
+                            onClick={() => window.print()}
+                            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold inline-flex items-center gap-1.5 shadow"
+                          >
+                            <Printer className="w-4 h-4" /> Print Dossier / PDF
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedReviewApp(null)}
+                            className="px-4 py-2 rounded-xl border border-slate-300 text-slate-600 font-bold hover:bg-slate-100 transition text-xs"
+                          >
+                            Close Dossier
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200 space-y-4">
+                        <div>
+                          <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight flex items-center gap-1.5">
+                            <CheckCircle className="w-4 h-4 text-sky-600" />
+                            Campus Physical Interview & Evaluation
+                          </h4>
+                          <p className="text-[11px] text-slate-500">
+                            Record interview performance, verify original certificates, and assign final recommendation.
+                          </p>
+                        </div>
+
+                        <form onSubmit={handleSubmitReview} className="space-y-4 text-xs">
                         
                         {/* 1. PHYSICAL INTERVIEW DATE, TIME & VENUE NOTES */}
                         <div className="p-3.5 bg-white rounded-2xl border border-slate-200 space-y-2.5">
@@ -3117,6 +3488,7 @@ export default function InstitutePortalPage() {
 
                       </form>
                     </div>
+                    )}
                   </div>
 
                 </div>

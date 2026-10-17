@@ -4,8 +4,9 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { useRouter } from 'next/navigation';
 import type { Session } from '@supabase/supabase-js';
 import { assertSupabaseConfigured, supabase } from '@/lib/supabase';
+import { authenticateSystemUser } from '@/lib/userService';
 
-export type UserRole = 'admin_head_hr' | 'receptionist' | 'institute_head' | 'guest';
+export type UserRole = 'admin_head_hr' | 'receptionist' | 'institute_head' | 'appointment_officer' | 'guest';
 
 export interface StaffSession {
   username: string;
@@ -26,7 +27,7 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-const ALLOWED_ROLES: UserRole[] = ['admin_head_hr', 'receptionist', 'institute_head'];
+const ALLOWED_ROLES: UserRole[] = ['admin_head_hr', 'receptionist', 'institute_head', 'appointment_officer'];
 
 function toStaffSession(authSession: Session, profile?: Record<string, unknown> | null): StaffSession {
   const profileRole = profile?.role as UserRole | undefined;
@@ -48,13 +49,18 @@ const ROLE_DEFAULT_USERS: Record<UserRole, StaffSession> = {
   },
   receptionist: {
     username: 'frontdesk@mandaltrust.org',
-    full_name: 'Central HR Front Desk',
+    full_name: 'Central HR Front Desk Officer',
     role: 'receptionist',
   },
   institute_head: {
     username: 'principal@mandaltrust.org',
     full_name: 'Principal / Institute Head',
     role: 'institute_head',
+  },
+  appointment_officer: {
+    username: 'appointment@mandaltrust.org',
+    full_name: 'Central Appointment Officer',
+    role: 'appointment_officer',
   },
   guest: {
     username: 'candidate@mandaltrust.org',
@@ -145,17 +151,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [loadStaffProfile]);
 
-  const login = async (email: string, password: string) => {
+  const login = async (emailOrUsername: string, password: string) => {
     assertSupabaseConfigured();
+
+    // 1. Check User Management (RBAC) registry first
+    const { user: sysUser, error: sysError } = authenticateSystemUser(emailOrUsername, password);
+    if (sysError) {
+      throw new Error(sysError);
+    }
+
+    if (sysUser) {
+      if (sysUser.is_active === false) {
+        throw new Error(`The account for "${sysUser.login_name || sysUser.username}" is DISABLED. Access is blocked. Contact Central HR Administrator.`);
+      }
+
+      const staffSession: StaffSession = {
+        username: sysUser.email || sysUser.username,
+        full_name: sysUser.login_name || sysUser.username,
+        role: sysUser.role,
+        linked_institute_id: sysUser.linked_institute_id,
+        logged_in_at: new Date().toISOString(),
+      };
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('smarthr_staff_session', JSON.stringify(staffSession));
+      }
+      setSession(staffSession);
+      return;
+    }
+
+    // 2. Try Supabase Auth
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email: emailOrUsername.trim(), password });
       if (error) throw error;
       if (data?.session) {
         const { data: profile } = await supabase
           .from('user_profiles')
-          .select('email, full_name, role, is_active')
+          .select('email, full_name, role, is_active, linked_institute_id')
           .eq('id', data.session.user.id)
           .maybeSingle();
+
+        if (profile?.is_active === false) {
+          await supabase.auth.signOut();
+          throw new Error('This user account is DISABLED. Please contact Central HR Administrator.');
+        }
 
         const staffSession = toStaffSession(data.session, profile as Record<string, unknown> | null);
         if (typeof window !== 'undefined') {
@@ -166,12 +205,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (authError: any) {
       // Demo / fallback credentials for development & testing
-      const cleanEmail = email.toLowerCase().trim();
+      const clean = emailOrUsername.toLowerCase().trim();
       let fallbackRole: UserRole | null = null;
-      if (cleanEmail.includes('admin') || cleanEmail.includes('hr')) fallbackRole = 'admin_head_hr';
-      else if (cleanEmail.includes('front') || cleanEmail.includes('reception')) fallbackRole = 'receptionist';
-      else if (cleanEmail.includes('principal') || cleanEmail.includes('head') || cleanEmail.includes('inst')) fallbackRole = 'institute_head';
-      else if (cleanEmail.includes('guest') || cleanEmail.includes('candidate')) fallbackRole = 'guest';
+      if (clean.includes('admin') || clean.includes('hr')) fallbackRole = 'admin_head_hr';
+      else if (clean.includes('front') || clean.includes('reception')) fallbackRole = 'receptionist';
+      else if (clean.includes('principal') || clean.includes('head') || clean.includes('inst')) fallbackRole = 'institute_head';
+      else if (clean.includes('appoint') || clean.includes('recruit')) fallbackRole = 'appointment_officer';
+      else if (clean.includes('guest') || clean.includes('candidate')) fallbackRole = 'guest';
 
       if (fallbackRole) {
         switchRole(fallbackRole);

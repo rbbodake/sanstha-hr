@@ -229,6 +229,14 @@ const SIDEBAR_MODULES: SidebarModule[] = [
         exact: true,
       },
       {
+        title: 'User Management & RBAC',
+        href: '/setup?tab=users',
+        icon: UserCog,
+        badge: 'RBAC',
+        badgeColor: 'bg-violet-800/70 text-violet-200',
+        exact: true,
+      },
+      {
         title: 'Job Designations & Roles Admin',
         href: '/admin/posts',
         icon: Briefcase,
@@ -280,23 +288,31 @@ const SIDEBAR_MODULES: SidebarModule[] = [
     ],
   },
 
-  // ── 5. APPOINTMENT & RECRUITMENT MODULE ──────────────────────
+  // ── 5. APPOINTMENT & RECRUITMENT MODULE (CENTRAL HR OVERSIGHT) ──
   {
     id: 'appointment',
     title: 'Appointment & Recruitment',
-    subtitle: 'Scheduling & Decisions',
-    icon: Calendar,
+    subtitle: 'Central Decisions & Orders',
+    icon: Award,
     accentColor: 'from-amber-600 to-orange-600',
     accentTextColor: 'text-amber-400',
     accentBorder: 'border-amber-700/40',
     accentBg: 'bg-amber-950/25',
-    badgeLabel: 'HR',
+    badgeLabel: 'Central HR',
     badgeCls: 'bg-amber-900/60 text-amber-300 border-amber-700',
-    roles: ['admin_head_hr', 'institute_head'],
+    roles: ['admin_head_hr', 'appointment_officer'],
     items: [
       {
+        title: 'Central Recruitment Overview',
+        href: '/appointment',
+        icon: LayoutDashboard,
+        badge: 'Central',
+        badgeColor: 'bg-amber-800/70 text-amber-200',
+        exact: true,
+      },
+      {
         title: 'Interview & Evaluation Queue',
-        href: '/institute-portal?filter=pending',
+        href: '/appointment?filter=pending',
         icon: Calendar,
         badge: 'Queue',
         badgeColor: 'bg-amber-800/70 text-amber-200',
@@ -304,10 +320,26 @@ const SIDEBAR_MODULES: SidebarModule[] = [
       },
       {
         title: 'Selected Candidates & Recommendations',
-        href: '/institute-portal?filter=selected',
+        href: '/appointment?filter=selected',
         icon: CheckCircle2,
         badge: 'Selected',
         badgeColor: 'bg-emerald-800/70 text-emerald-200',
+        exact: true,
+      },
+      {
+        title: 'Management Approved Appointments',
+        href: '/appointment?filter=management_approved',
+        icon: Award,
+        badge: 'Approved',
+        badgeColor: 'bg-indigo-800/70 text-indigo-200',
+        exact: true,
+      },
+      {
+        title: 'Official Appointment Orders',
+        href: '/appointment?tab=orders',
+        icon: FileCheck,
+        badge: 'Orders',
+        badgeColor: 'bg-purple-800/70 text-purple-200',
         exact: true,
       },
     ],
@@ -346,6 +378,13 @@ const ROLE_LABELS: Record<UserRole, {
     icon: GraduationCap,
     description: 'Institute Openings, Approvals & Candidate Applications',
   },
+  appointment_officer: {
+    label: 'Appointment Officer',
+    shortLabel: 'Appointment',
+    color: 'bg-amber-700 text-white border-amber-800 hover:bg-amber-800',
+    icon: Award,
+    description: 'Dedicated access strictly to Appointment & Recruitment Module',
+  },
   guest: {
     label: 'Candidate / Public',
     shortLabel: 'Public Mode',
@@ -361,6 +400,7 @@ const ROLE_LABELS: Record<UserRole, {
 
 function getBreadcrumbTitle(pathname: string): string {
   if (pathname === '/') return 'Sanstha HR — Central Dashboard';
+  if (pathname.startsWith('/appointment')) return 'Appointment & Recruitment — Central HR Section';
   if (pathname === '/receptionist') return 'Front Desk & Live Registration';
   if (pathname === '/receptionist/fee-register') return 'Application Fee Register & Receipts';
   if (pathname === '/institute-portal') return 'Institute Head & Principal Portal';
@@ -369,7 +409,7 @@ function getBreadcrumbTitle(pathname: string): string {
   if (pathname.startsWith('/admin/institutes/')) return 'Institute Detailed Profile';
   if (pathname.startsWith('/admin/institutes')) return 'Institute / College Master';
   if (pathname.startsWith('/admin/posts')) return 'Job Designations & Roles Master';
-  if (pathname.startsWith('/setup')) return 'Trust Branding & Fee Setup Wizard';
+  if (pathname.startsWith('/setup')) return 'Trust Branding & Setup Wizard (RBAC)';
   if (pathname === '/apply') return 'Candidate Walk-in Application Form';
   if (pathname === '/apply/status') return 'Application Status Tracker';
   if (pathname === '/apply/upload') return 'Document Upload Centre';

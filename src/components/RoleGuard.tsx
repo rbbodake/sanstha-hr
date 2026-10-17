@@ -72,7 +72,7 @@ export function RoleGuard({
                 onClick={() => switchRole(r)}
                 className="px-3 py-1.5 bg-sky-700 hover:bg-sky-800 text-white rounded-xl text-xs font-bold transition shadow-sm"
               >
-                Switch to {r === 'admin_head_hr' ? 'Head Central HR' : r === 'receptionist' ? 'Front Desk' : r === 'institute_head' ? 'Institute Head' : r}
+                Switch to {r === 'admin_head_hr' ? 'Head Central HR' : r === 'receptionist' ? 'Front Desk' : r === 'institute_head' ? 'Institute Head' : r === 'appointment_officer' ? 'Appointment Officer' : r}
               </button>
             ))}
           </div>

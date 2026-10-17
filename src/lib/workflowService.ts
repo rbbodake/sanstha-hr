@@ -365,25 +365,79 @@ export async function submitInstituteHeadReview(params: {
   return { success: true };
 }
 
-/**
- * Step 3: Central HR & Trust Management grants final appointment / management approval
- */
-export async function grantManagementApproval(params: {
+export interface ManagementApprovalParams {
   applicationId: string;
   applicationNo: string;
   candidateName: string;
+  targetInstituteId?: string;
+  targetInstituteName?: string;
+  headName?: string;
+  headEmail?: string;
   approvedBy?: string;
   approvalRemarks?: string;
-}): Promise<{ success: boolean; error?: string }> {
+  joiningDate?: string;
+  mandatoryBondDetails?: string;
+  confirmedDesignation?: string;
+  payScale?: string;
+  basicPay?: number;
+  agreedTotalSalary: number; // Compulsory!
+  appointmentInstructions?: string;
+  pushToInstitutePortal?: boolean;
+  pushToAppointmentSection?: boolean;
+  callerRole?: string;
+}
+
+/**
+ * Step 3: Central HR & Trust Management grants final appointment / management approval
+ * Records structured administrative instructions (joining date, bond, confirmed designation, pay, compulsory salary)
+ * and securely propagates data downstream to Institute Portal & Appointment Order Generation Section.
+ */
+export async function grantManagementApproval(params: ManagementApprovalParams): Promise<{ success: boolean; error?: string }> {
+  // Service-level validation: Agreed Total Salary Amount is COMPULSORY
+  if (
+    params.agreedTotalSalary === undefined ||
+    params.agreedTotalSalary === null ||
+    isNaN(Number(params.agreedTotalSalary)) ||
+    Number(params.agreedTotalSalary) <= 0
+  ) {
+    return {
+      success: false,
+      error: 'Agreed Total Salary Amount is compulsory and must be a valid amount greater than 0.',
+    };
+  }
+
   const now = new Date().toISOString();
-  const actor = params.approvedBy || 'Central HR Administration';
+  const actor = params.approvedBy || 'Central HR Management';
   const remarks = params.approvalRemarks?.trim() || 'Formal Management & Central HR Appointment Approval Granted.';
+  const agreedSalary = Number(params.agreedTotalSalary);
+  const designation = params.confirmedDesignation?.trim() || 'Confirmed Faculty / Staff';
+  const joiningDate = params.joiningDate || null;
+  const bondDetails = params.mandatoryBondDetails?.trim() || null;
+  const payScale = params.payScale?.trim() || null;
+  const basicPay = params.basicPay != null && !isNaN(Number(params.basicPay)) ? Number(params.basicPay) : null;
+  const instructions = params.appointmentInstructions?.trim() || null;
+
+  const pushToInstitute = params.pushToInstitutePortal !== false;
+  const pushToApptSection = params.pushToAppointmentSection !== false;
 
   const updates: Partial<Application> = {
     status: 'management_approved',
     management_approved_at: now,
     management_approved_by: actor,
     management_approval_remarks: remarks,
+    joining_date: joiningDate,
+    mandatory_bond_details: bondDetails,
+    confirmed_designation: designation,
+    pay_scale: payScale,
+    basic_pay: basicPay,
+    agreed_total_salary: agreedSalary,
+    appointment_instructions: instructions,
+    appointment_order_workflow_initiated: pushToApptSection,
+    appointment_order_status: 'initiated',
+    pushed_to_institute_portal: pushToInstitute,
+    pushed_to_appointment_section: pushToApptSection,
+    downstream_pushed_at: now,
+    downstream_pushed_by: actor,
   };
 
   saveLocalApplicationOverride(params.applicationId, updates);
@@ -400,12 +454,12 @@ export async function grantManagementApproval(params: {
     console.warn('DB management approval error:', err);
   }
 
-  // Insert In-App Notification for Record
-  const newNotif: Partial<Notification> = {
-    id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `notif_${Date.now()}`,
+  // 1. In-App Notification for Central HR / Record
+  const hrNotif: Partial<Notification> = {
+    id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `notif_${Date.now()}_hr`,
     recipient_role: 'admin_head_hr',
     title: `Management Approval Granted: #${params.applicationNo}`,
-    message: `Final Management & Central HR Appointment Approval successfully recorded for ${params.candidateName} (#${params.applicationNo}). Candidate is cleared for offer letter issuance.`,
+    message: `Final Management & Central HR Appointment Approval successfully recorded for ${params.candidateName} (#${params.applicationNo}) as ${designation}. Agreed Total Salary: ₹${agreedSalary.toLocaleString('en-IN')}. Date of Joining: ${joiningDate || 'Scheduled'}.`,
     type: 'management_approved',
     application_id: params.applicationId,
     is_read: false,
@@ -413,25 +467,97 @@ export async function grantManagementApproval(params: {
       application_no: params.applicationNo,
       candidate_name: params.candidateName,
       approved_by: actor,
+      agreed_total_salary: agreedSalary,
+      confirmed_designation: designation,
+      joining_date: joiningDate,
     },
     created_at: now,
   };
-  saveNotificationLocal(newNotif as Notification);
+  saveNotificationLocal(hrNotif as Notification);
   try {
-    await supabase.from('notifications').insert(newNotif);
+    await supabase.from('notifications').insert(hrNotif);
   } catch (e) {}
 
-  // Log Audit Trail
+  // 2. Downstream Propagation -> Institute Portal Notification
+  if (pushToInstitute) {
+    const instNotif: Partial<Notification> = {
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `notif_${Date.now()}_inst`,
+      recipient_role: 'institute_head',
+      recipient_email: params.headEmail,
+      recipient_institute_id: params.targetInstituteId,
+      title: `Appointment Approval Granted: #${params.applicationNo} (${params.candidateName})`,
+      message: `Formal Management & Central HR Appointment Approval Granted for ${params.candidateName} (#${params.applicationNo}). Confirmed Designation: ${designation}. Date of Joining: ${joiningDate || 'As per order'}. Agreed Total Salary: ₹${agreedSalary.toLocaleString('en-IN')}. Bond / Compliance: ${bondDetails || 'Standard'}. Detailed instructions rendered in candidate dossier.`,
+      type: 'management_approved',
+      application_id: params.applicationId,
+      is_read: false,
+      metadata: {
+        application_no: params.applicationNo,
+        candidate_name: params.candidateName,
+        confirmed_designation: designation,
+        joining_date: joiningDate,
+        agreed_total_salary: agreedSalary,
+        mandatory_bond_details: bondDetails,
+        appointment_instructions: instructions,
+        approved_by: actor,
+      },
+      created_at: now,
+    };
+    saveNotificationLocal(instNotif as Notification);
+    try {
+      await supabase.from('notifications').insert(instNotif);
+    } catch (e) {}
+  }
+
+  // 3. Downstream Propagation -> Appointment & Recruitment Section Notification
+  if (pushToApptSection) {
+    const apptNotif: Partial<Notification> = {
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `notif_${Date.now()}_appt`,
+      recipient_role: 'admin_head_hr',
+      title: `Initiate Appointment Order Generation: #${params.applicationNo} (${params.candidateName})`,
+      message: `Official appointment order generation workflow initiated for ${params.candidateName} (#${params.applicationNo}) as ${designation}. Date of Joining: ${joiningDate || 'Scheduled'}. Basic Pay: ₹${basicPay != null ? basicPay.toLocaleString('en-IN') : 'N/A'}, Total Salary: ₹${agreedSalary.toLocaleString('en-IN')}. Bond Requirements: ${bondDetails || 'Standard Compliance'}. Ready for official order drafting.`,
+      type: 'appointment_order_initiated',
+      application_id: params.applicationId,
+      is_read: false,
+      metadata: {
+        application_no: params.applicationNo,
+        candidate_name: params.candidateName,
+        confirmed_designation: designation,
+        joining_date: joiningDate,
+        agreed_total_salary: agreedSalary,
+        basic_pay: basicPay,
+        pay_scale: payScale,
+        mandatory_bond_details: bondDetails,
+        appointment_instructions: instructions,
+        workflow_initiated: true,
+      },
+      created_at: now,
+    };
+    saveNotificationLocal(apptNotif as Notification);
+    try {
+      await supabase.from('notifications').insert(apptNotif);
+    } catch (e) {}
+  }
+
+  // 4. Log Complete Audit Trail
   const logEntry: Partial<ApplicationWorkflowLog> = {
     id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `log_${Date.now()}`,
     application_id: params.applicationId,
     action: 'management_approved',
     actor_name: actor,
     actor_role: 'Central HR Management / Trustee Board',
-    remarks: remarks,
+    remarks: `Formal Management Approval Granted & Propagated Downstream. Designation: ${designation}. Total Salary: ₹${agreedSalary.toLocaleString('en-IN')}. Date of Joining: ${joiningDate || 'TBD'}. Bond: ${bondDetails || 'Standard'}.`,
     metadata: {
       status: 'management_approved',
       approved_at: now,
+      confirmed_designation: designation,
+      joining_date: joiningDate,
+      agreed_total_salary: agreedSalary,
+      pay_scale: payScale,
+      basic_pay: basicPay,
+      mandatory_bond_details: bondDetails,
+      appointment_instructions: instructions,
+      pushed_to_institute_portal: pushToInstitute,
+      pushed_to_appointment_section: pushToApptSection,
     },
     created_at: now,
   };
@@ -442,6 +568,117 @@ export async function grantManagementApproval(params: {
   } catch (e) {
     console.warn('DB workflow log insert warning:', e);
   }
+
+  // 5. Trigger Simulated Email Dispatches to Downstream Parties
+  if (params.headEmail) {
+    dispatchSimulatedEmail({
+      toEmail: params.headEmail,
+      toName: params.headName || 'Institute Head / Principal',
+      subject: `[SmartHR Official] Formal Appointment Approval Granted: ${params.candidateName} (#${params.applicationNo})`,
+      body: `Respected ${params.headName || 'Principal'},\n\nFormal Management & Central HR Appointment Approval has been granted for the selected candidate:\n\n• Candidate: ${params.candidateName} (#${params.applicationNo})\n• Confirmed Designation: ${designation}\n• Expected Date of Joining: ${joiningDate || 'As per appointment order'}\n• Pay Scale / Basic Pay: ${payScale || 'Standard'} / Basic ₹${basicPay != null ? basicPay.toLocaleString('en-IN') : 'N/A'}\n• Agreed Total Salary Amount: ₹${agreedSalary.toLocaleString('en-IN')}\n• Mandatory Bond Requirements: ${bondDetails || 'Standard Compliance'}\n• Instructions: "${instructions || remarks}"\n\nThe candidate dossier in your Institute Portal has been updated with these complete instructions.\n\nCentral HR Department`,
+      timestamp: now,
+      alertType: 'forwarded_to_institute',
+    });
+  }
+
+  dispatchSimulatedEmail({
+    toEmail: 'appointment.orders@mandaltrust.org',
+    toName: 'Appointment Order Section',
+    subject: `[SmartHR Action Required] Initiate Appointment Order: ${params.candidateName} (#${params.applicationNo}) - ${designation}`,
+    body: `Appointment & Recruitment Section,\n\nCandidate ${params.candidateName} (#${params.applicationNo}) has received formal Central HR & Management approval. Please initiate appointment order drafting with the approved terms:\n\n• Designation: ${designation}\n• Joining Date: ${joiningDate || 'Immediate / As per schedule'}\n• Basic Pay: ₹${basicPay != null ? basicPay.toLocaleString('en-IN') : 'N/A'}\n• Agreed Total Salary: ₹${agreedSalary.toLocaleString('en-IN')}\n• Mandatory Bond Submissions: ${bondDetails || 'Standard service bond'}\n• Special Instructions: "${instructions || remarks}"\n\nCentral HR ERP System`,
+    timestamp: now,
+    alertType: 'forwarded_to_institute',
+  });
+
+  return { success: true };
+}
+
+/**
+ * Interface Action: Securely push / re-sync complete status and dossier update to downstream modules
+ * (Institute Portal & Appointment Order Generation Section)
+ */
+export async function pushDossierDownstream(params: {
+  application: Application;
+  pushedBy?: string;
+  targetInstituteName?: string;
+  headName?: string;
+  headEmail?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const app = params.application;
+  const now = new Date().toISOString();
+  const actor = params.pushedBy || 'Central HR Admin';
+
+  const updates: Partial<Application> = {
+    pushed_to_institute_portal: true,
+    pushed_to_appointment_section: true,
+    appointment_order_workflow_initiated: true,
+    appointment_order_status: app.appointment_order_status || 'initiated',
+    downstream_pushed_at: now,
+    downstream_pushed_by: actor,
+  };
+
+  saveLocalApplicationOverride(app.id, updates);
+
+  try {
+    await supabase.from('applications').update(updates).eq('id', app.id);
+  } catch (err) {
+    console.warn('DB push update warning:', err);
+  }
+
+  // 1. Notify Institute Portal
+  const instNotif: Partial<Notification> = {
+    id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `notif_${Date.now()}_sync_inst`,
+    recipient_role: 'institute_head',
+    recipient_email: params.headEmail || app.forwarded_to_head_email,
+    recipient_institute_id: app.forwarded_to_institute_id,
+    title: `Dossier Synchronized: Formal Approval for #${app.application_no} (${app.candidate_name})`,
+    message: `Central HR has synchronized the latest appointment approval dossier for ${app.candidate_name} (#${app.application_no}). Confirmed Designation: ${app.confirmed_designation || 'Faculty'}. Joining Date: ${app.joining_date || 'As per order'}. Agreed Salary: ₹${(app.agreed_total_salary || 0).toLocaleString('en-IN')}.`,
+    type: 'management_approved',
+    application_id: app.id,
+    is_read: false,
+    created_at: now,
+  };
+  saveNotificationLocal(instNotif as Notification);
+  try {
+    await supabase.from('notifications').insert(instNotif);
+  } catch (e) {}
+
+  // 2. Notify Appointment Section
+  const apptNotif: Partial<Notification> = {
+    id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `notif_${Date.now()}_sync_appt`,
+    recipient_role: 'admin_head_hr',
+    title: `Appointment Order Workflow Active: #${app.application_no} (${app.candidate_name})`,
+    message: `Appointment order generation workflow flagged and synchronized for ${app.candidate_name} (#${app.application_no}). Designation: ${app.confirmed_designation || 'Faculty'}. Total Salary: ₹${(app.agreed_total_salary || 0).toLocaleString('en-IN')}.`,
+    type: 'appointment_order_initiated',
+    application_id: app.id,
+    is_read: false,
+    created_at: now,
+  };
+  saveNotificationLocal(apptNotif as Notification);
+  try {
+    await supabase.from('notifications').insert(apptNotif);
+  } catch (e) {}
+
+  // 3. Log Audit
+  const logEntry: Partial<ApplicationWorkflowLog> = {
+    id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `log_${Date.now()}`,
+    application_id: app.id,
+    action: 'downstream_propagated',
+    actor_name: actor,
+    actor_role: 'Central HR Admin',
+    remarks: `Pushed complete appointment instructions dossier downstream to Institute Portal and Appointment Order section.`,
+    metadata: {
+      downstream_pushed_at: now,
+      confirmed_designation: app.confirmed_designation,
+      agreed_total_salary: app.agreed_total_salary,
+      joining_date: app.joining_date,
+    },
+    created_at: now,
+  };
+  saveWorkflowLogLocal(logEntry as ApplicationWorkflowLog);
+  try {
+    await supabase.from('application_workflow_logs').insert(logEntry);
+  } catch (e) {}
 
   return { success: true };
 }
@@ -459,6 +696,8 @@ export async function fetchNotifications(role: string, instituteId?: string): Pr
       } else {
         query = query.eq('recipient_role', 'institute_head');
       }
+    } else if (role === 'appointment_officer') {
+      query = query.in('recipient_role', ['appointment_officer', 'admin_head_hr']);
     } else {
       query = query.in('recipient_role', ['admin_head_hr', 'receptionist']);
     }
@@ -514,6 +753,9 @@ function getLocalNotifications(role: string, instituteId?: string): Notification
     if (role === 'institute_head') {
       return list.filter((n) => n.recipient_role === 'institute_head' && (!instituteId || !n.recipient_institute_id || n.recipient_institute_id === instituteId));
     }
+    if (role === 'appointment_officer') {
+      return list.filter((n) => ['appointment_officer', 'admin_head_hr'].includes(n.recipient_role));
+    }
     return list.filter((n) => ['admin_head_hr', 'receptionist'].includes(n.recipient_role));
   } catch {
     return [];
@@ -537,4 +779,62 @@ export function getLocalWorkflowLogs(applicationId: string): ApplicationWorkflow
   } catch {
     return [];
   }
+}
+
+/**
+ * Helper to generate official Appointment Order Number
+ */
+export function generateAppointmentOrderNumber(appNo: string): string {
+  const digits = appNo.replace(/[^0-9]/g, '');
+  const seq = digits.length >= 4 ? digits.slice(-4) : digits.padStart(4, '0') || '1001';
+  return `SBMSPM/APT/2026-27/${seq}`;
+}
+
+/**
+ * Update downstream appointment order status and audit trail
+ */
+export async function updateAppointmentOrderStatus(params: {
+  applicationId: string;
+  applicationNo: string;
+  candidateName: string;
+  status: 'initiated' | 'pending_generation' | 'order_generated' | 'order_dispatched' | 'joined';
+  appointmentOrderNo?: string;
+  actorName?: string;
+  actorRole?: string;
+  remarks?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const now = new Date().toISOString();
+  const actor = params.actorName || 'Central Appointment Section';
+  const role = params.actorRole || 'appointment_officer';
+
+  const updates: Partial<Application> = {
+    appointment_order_status: params.status,
+    downstream_pushed_at: now,
+    downstream_pushed_by: actor,
+  };
+
+  saveLocalApplicationOverride(params.applicationId, updates);
+
+  try {
+    await supabase.from('applications').update(updates).eq('id', params.applicationId);
+  } catch (e) {
+    console.warn('DB updateAppointmentOrderStatus warning:', e);
+  }
+
+  const logEntry: Partial<ApplicationWorkflowLog> = {
+    id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `log_${Date.now()}`,
+    application_id: params.applicationId,
+    action: 'appointment_order_status_updated',
+    actor_name: actor,
+    actor_role: role,
+    notes: params.remarks || `Appointment order status changed to "${params.status}"${params.appointmentOrderNo ? ` (Order No: ${params.appointmentOrderNo})` : ''}.`,
+    created_at: now,
+  };
+
+  saveWorkflowLogLocal(logEntry as ApplicationWorkflowLog);
+  try {
+    await supabase.from('application_workflow_logs').insert(logEntry);
+  } catch (e) {}
+
+  return { success: true };
 }

@@ -24,7 +24,8 @@ import {
   Sparkles,
   CheckCircle2,
   Clock,
-  ArrowUpRight
+  ArrowUpRight,
+  UserCog
 } from 'lucide-react';
 import { TrustLetterhead } from '@/components/TrustLetterhead';
 
@@ -302,26 +303,70 @@ export default function HomePage() {
           {/* Card 5: Institute Head Portal */}
           <Link
             href="/institute-portal"
-            className="group p-6 bg-white hover:bg-amber-50/50 border-2 border-slate-200 hover:border-amber-600 rounded-3xl shadow-sm hover:shadow-xl transition duration-200 flex flex-col justify-between"
+            className="group p-6 bg-white hover:bg-indigo-50/50 border-2 border-slate-200 hover:border-indigo-600 rounded-3xl shadow-sm hover:shadow-xl transition duration-200 flex flex-col justify-between"
           >
             <div>
-              <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-amber-600 group-hover:text-white transition duration-200 shadow-sm">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-indigo-600 group-hover:text-white transition duration-200 shadow-sm">
                 <GraduationCap className="w-6 h-6" />
               </div>
               <h3 className="font-bold text-slate-900 text-base mb-1">
-                Principal & Institute Head Portal
+                Principal &amp; Institute Head Portal
               </h3>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Dedicated college portal for Principals to view approved regulatory bodies, sanctioned intakes, and branch statistics.
+                Dedicated college portal for Principals to view candidate submissions, physical interview evaluation scores, and sanctioned staff matrix.
               </p>
             </div>
-            <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-amber-700 group-hover:text-amber-800">
+            <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-indigo-700 group-hover:text-indigo-800">
               <span>Open Principal Portal</span>
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1.5 transition" />
             </div>
           </Link>
 
-          {/* Card 6: Staff Login & Auth Portal */}
+          {/* Card 6: Standalone Appointment & Recruitment Section */}
+          <Link
+            href="/appointment"
+            className="group p-6 bg-white hover:bg-amber-50/50 border-2 border-slate-200 hover:border-amber-600 rounded-3xl shadow-sm hover:shadow-xl transition duration-200 flex flex-col justify-between"
+          >
+            <div>
+              <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-amber-600 group-hover:text-white transition duration-200 shadow-sm">
+                <Award className="w-6 h-6" />
+              </div>
+              <h3 className="font-bold text-slate-900 text-base mb-1">
+                Appointment &amp; Recruitment Section
+              </h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Central HR top-level module: interview evaluation queue, management approval terms, and official appointment orders across all institutes.
+              </p>
+            </div>
+            <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-amber-700 group-hover:text-amber-800">
+              <span>Manage Appointments</span>
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1.5 transition" />
+            </div>
+          </Link>
+
+          {/* Card 7: User Management & RBAC Settings */}
+          <Link
+            href="/setup?tab=users"
+            className="group p-6 bg-white hover:bg-purple-50/50 border-2 border-slate-200 hover:border-purple-600 rounded-3xl shadow-sm hover:shadow-xl transition duration-200 flex flex-col justify-between"
+          >
+            <div>
+              <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-purple-600 group-hover:text-white transition duration-200 shadow-sm">
+                <UserCog className="w-6 h-6" />
+              </div>
+              <h3 className="font-bold text-slate-900 text-base mb-1">
+                User Management &amp; RBAC
+              </h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Provision staff users, assign Role-Based Access Control (Front Desk, Central HR, Institute Head, Appointment Officer), and disable accounts.
+              </p>
+            </div>
+            <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-purple-700 group-hover:text-purple-800">
+              <span>Manage Users</span>
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1.5 transition" />
+            </div>
+          </Link>
+
+          {/* Card 8: Staff Login & Auth Portal */}
           <Link
             href="/login"
             className="group p-6 bg-white hover:bg-slate-100 border-2 border-slate-200 hover:border-slate-800 rounded-3xl shadow-sm hover:shadow-xl transition duration-200 flex flex-col justify-between"
@@ -331,10 +376,10 @@ export default function HomePage() {
                 <Lock className="w-6 h-6" />
               </div>
               <h3 className="font-bold text-slate-900 text-base mb-1">
-                Staff Login & Switcher
+                Staff Login &amp; Switcher
               </h3>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Secure sign-in for Head Central HR, Principals, and Front Desk staff with 1-click test access credentials.
+                Secure sign-in for Head Central HR, Appointment Officer, Principals, and Front Desk staff with 1-click test credentials.
               </p>
             </div>
             <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-slate-800 group-hover:text-slate-950">

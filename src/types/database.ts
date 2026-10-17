@@ -149,12 +149,17 @@ export type PaymentMode = {
 
 export type UserProfile = {
   id: string;
+  username?: string;
+  login_name?: string;
   email: string;
+  mobile_number?: string;
+  password?: string;
   full_name: string;
-  role: 'admin_head_hr' | 'receptionist' | 'institute_head';
+  role: 'admin_head_hr' | 'receptionist' | 'institute_head' | 'appointment_officer';
   linked_institute_id?: string;
   is_active: boolean;
   created_at: string;
+  updated_at?: string;
 };
 
 export type ApplicationEducation = {
@@ -285,10 +290,23 @@ export type Application = {
   interview_evaluation_report_url?: string | null;
   head_signature_url?: string | null;
 
-  // Management Approval Workflow Fields
+  // Management Approval & Administrative Appointment Workflow Fields
   management_approved_at?: string | null;
   management_approved_by?: string | null;
   management_approval_remarks?: string | null;
+  joining_date?: string | null; // Candidate Date of Joining
+  mandatory_bond_details?: string | null; // Mandatory Bond Submissions or compliance requirements
+  confirmed_designation?: string | null; // Confirmed Designation recommendation
+  pay_scale?: string | null; // Pay Scale details
+  basic_pay?: number | null; // Basic Pay
+  agreed_total_salary?: number | null; // Agreed Total Salary Amount (Compulsory)
+  appointment_instructions?: string | null; // Additional customized important instructions or remarks
+  appointment_order_workflow_initiated?: boolean | null; // Flag to initiate official appointment order generation
+  appointment_order_status?: 'initiated' | 'pending_generation' | 'order_generated' | 'order_dispatched' | 'joined' | null;
+  pushed_to_institute_portal?: boolean | null;
+  pushed_to_appointment_section?: boolean | null;
+  downstream_pushed_at?: string | null;
+  downstream_pushed_by?: string | null;
 
   created_at: string;
   updated_at: string;
@@ -303,12 +321,12 @@ export type Application = {
 
 export type Notification = {
   id: string;
-  recipient_role: 'admin_head_hr' | 'receptionist' | 'institute_head';
+  recipient_role: 'admin_head_hr' | 'receptionist' | 'institute_head' | 'appointment_officer';
   recipient_email?: string;
   recipient_institute_id?: string;
   title: string;
   message: string;
-  type: 'forwarded_to_institute' | 'institute_reviewed' | 'interview_requested' | 'management_approved' | 'system_alert';
+  type: 'forwarded_to_institute' | 'institute_reviewed' | 'interview_requested' | 'management_approved' | 'appointment_order_initiated' | 'downstream_propagated' | 'system_alert';
   application_id?: string;
   is_read: boolean;
   metadata?: Record<string, any>;
@@ -318,10 +336,11 @@ export type Notification = {
 export type ApplicationWorkflowLog = {
   id: string;
   application_id: string;
-  action: 'forwarded_to_institute' | 'institute_reviewed' | 'interview_requested' | 'interview_scheduled' | 'management_approved' | 'status_changed';
+  action: 'forwarded_to_institute' | 'institute_reviewed' | 'interview_requested' | 'interview_scheduled' | 'management_approved' | 'downstream_propagated' | 'status_changed' | 'appointment_order_status_updated';
   actor_name: string;
   actor_role: string;
   remarks?: string;
+  notes?: string;
   metadata?: Record<string, any>;
   created_at: string;
 };

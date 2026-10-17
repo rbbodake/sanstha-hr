@@ -24,7 +24,7 @@ import {
 } from '@/lib/workflowService';
 
 interface NotificationBellProps {
-  role: 'admin_head_hr' | 'receptionist' | 'institute_head' | 'guest';
+  role: 'admin_head_hr' | 'receptionist' | 'institute_head' | 'appointment_officer' | 'guest';
   instituteId?: string;
   onSelectApplication?: (applicationId: string) => void;
 }
