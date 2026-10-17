@@ -20,7 +20,7 @@ interface AuthContextType {
   session: StaffSession | null;
   role: UserRole;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<StaffSession>;
   logout: () => Promise<void>;
   switchRole: (newRole: UserRole) => void;
   hasAccess: (allowedRoles: UserRole[]) => boolean;
@@ -112,21 +112,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let active = true;
 
-    // Restore local session preference or default to admin_head_hr
+    // Restore local session preference or null if not logged in
     try {
       const saved = typeof window !== 'undefined' ? localStorage.getItem('smarthr_staff_session') : null;
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed?.role) {
+        if (parsed?.role && parsed.role !== 'guest') {
           setSession(parsed);
         } else {
-          setSession(ROLE_DEFAULT_USERS.admin_head_hr);
+          setSession(null);
         }
       } else {
-        setSession(ROLE_DEFAULT_USERS.admin_head_hr);
+        setSession(null);
       }
     } catch {
-      setSession(ROLE_DEFAULT_USERS.admin_head_hr);
+      setSession(null);
     }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, authSession) => {
@@ -151,7 +151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [loadStaffProfile]);
 
-  const login = async (emailOrUsername: string, password: string) => {
+  const login = async (emailOrUsername: string, password: string): Promise<StaffSession> => {
     assertSupabaseConfigured();
 
     // 1. Check User Management (RBAC) registry first
@@ -177,7 +177,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem('smarthr_staff_session', JSON.stringify(staffSession));
       }
       setSession(staffSession);
-      return;
+      return staffSession;
     }
 
     // 2. Try Supabase Auth
@@ -201,8 +201,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           localStorage.setItem('smarthr_staff_session', JSON.stringify(staffSession));
         }
         setSession(staffSession);
-        return;
+        return staffSession;
       }
+      throw new Error('No session returned by authentication service.');
     } catch (authError: any) {
       // Demo / fallback credentials for development & testing
       const clean = emailOrUsername.toLowerCase().trim();
@@ -213,9 +214,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       else if (clean.includes('appoint') || clean.includes('recruit')) fallbackRole = 'appointment_officer';
       else if (clean.includes('guest') || clean.includes('candidate')) fallbackRole = 'guest';
 
-      if (fallbackRole) {
-        switchRole(fallbackRole);
-        return;
+      if (fallbackRole && fallbackRole !== 'guest') {
+        const template = ROLE_DEFAULT_USERS[fallbackRole];
+        const staffSession: StaffSession = {
+          ...template,
+          logged_in_at: new Date().toISOString(),
+        };
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('smarthr_staff_session', JSON.stringify(staffSession));
+        }
+        setSession(staffSession);
+        return staffSession;
       }
       throw authError;
     }
@@ -230,11 +239,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('smarthr_staff_session');
     }
-    setSession(ROLE_DEFAULT_USERS.guest);
+    setSession(null);
     router.push('/login');
   };
 
   const switchRole = (newRole: UserRole) => {
+    if (newRole === 'guest') {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('smarthr_staff_session');
+      }
+      setSession(null);
+      return;
+    }
     const template = ROLE_DEFAULT_USERS[newRole] || ROLE_DEFAULT_USERS.admin_head_hr;
     const newSession: StaffSession = {
       ...template,
@@ -246,7 +262,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSession(newSession);
   };
 
-  const role = session?.role || 'admin_head_hr';
+  const role: UserRole = session?.role || 'guest';
   const hasAccess = (allowedRoles: UserRole[]) => allowedRoles.includes(role);
 
   return (

@@ -2,9 +2,11 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { OrganizationSettings } from '@/types/database';
 import { useAuth } from '@/context/AuthContext';
+import { RoleGuard } from '@/components/RoleGuard';
 import {
   Building2,
   UserCheck,
@@ -47,7 +49,8 @@ const defaultOrg: OrganizationSettings = {
 };
 
 export default function HomePage() {
-  const { role, session } = useAuth();
+  const router = useRouter();
+  const { role, session, isLoading } = useAuth();
   const [org, setOrg] = useState<OrganizationSettings>(defaultOrg);
   const [stats, setStats] = useState({
     totalApplications: 0,
@@ -57,6 +60,29 @@ export default function HomePage() {
     totalPosts: 0,
   });
   const [loadingStats, setLoadingStats] = useState(true);
+
+  // Authentication & Role Routing Guard
+  useEffect(() => {
+    if (isLoading) return;
+
+    if (!session) {
+      router.replace('/login');
+      return;
+    }
+
+    if (session.role === 'appointment_officer') {
+      router.replace('/appointment');
+      return;
+    }
+    if (session.role === 'receptionist') {
+      router.replace('/receptionist');
+      return;
+    }
+    if (session.role === 'institute_head') {
+      router.replace('/institute-portal');
+      return;
+    }
+  }, [session, isLoading, router]);
 
   useEffect(() => {
     async function loadData() {
@@ -94,8 +120,23 @@ export default function HomePage() {
     loadData();
   }, []);
 
+  if (isLoading || !session || session.role !== 'admin_head_hr') {
+    return (
+      <div className="min-h-[70vh] flex flex-col items-center justify-center p-6 text-center space-y-3">
+        <div className="w-12 h-12 border-4 border-sky-600 border-t-transparent rounded-full animate-spin mx-auto" />
+        <p className="text-sm font-bold text-slate-700">Connecting to SmartHR Portal…</p>
+        <p className="text-xs text-slate-400">Verifying authorized Central HR session</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-4 sm:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-300">
+    <RoleGuard
+      allowedRoles={['admin_head_hr']}
+      title="Central HR Executive Dashboard"
+      description="Full administrative access to Central HR operations is restricted to Head Central HR."
+    >
+      <div className="p-4 sm:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-300">
       {/* Top Welcome Banner Card */}
       <div className="bg-gradient-to-r from-slate-900 via-sky-950 to-indigo-950 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden border border-slate-800">
         <div className="absolute right-0 top-0 bottom-0 w-96 bg-gradient-to-l from-sky-500/10 to-transparent pointer-events-none" />
@@ -454,5 +495,6 @@ export default function HomePage() {
         </div>
       </div>
     </div>
+  </RoleGuard>
   );
 }

@@ -19,8 +19,16 @@ export default function LoginPage() {
     setLoading(true);
     setErrorMsg(null);
     try {
-      await login(identifier, password);
-      router.replace('/');
+      const userSession = await login(identifier, password);
+      if (userSession.role === 'appointment_officer') {
+        router.replace('/appointment');
+      } else if (userSession.role === 'receptionist') {
+        router.replace('/receptionist');
+      } else if (userSession.role === 'institute_head') {
+        router.replace('/institute-portal');
+      } else {
+        router.replace('/');
+      }
     } catch (error) {
       setErrorMsg(error instanceof Error ? error.message : 'Unable to sign in. Check your credentials and try again.');
     } finally {
@@ -164,12 +172,10 @@ export default function LoginPage() {
           </div>
 
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-medium">
-            <Link href="/" className="hover:text-sky-700 flex items-center gap-1 transition">
-              <ArrowLeft className="w-3.5 h-3.5" /> Back to Dashboard
+            <Link href="/apply" className="hover:text-sky-700 flex items-center gap-1 transition">
+              <ArrowLeft className="w-3.5 h-3.5" /> Candidate Walk-in Form
             </Link>
-            <Link href="/setup?tab=users" className="hover:text-sky-700 transition">
-              Manage Users (RBAC)
-            </Link>
+            <span className="text-[11px] text-slate-400 font-medium">Central HR System</span>
           </div>
         </div>
       </div>
