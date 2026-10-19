@@ -52,10 +52,12 @@ export async function POST(request: NextRequest) {
     const acceptsHtml = request.headers.get('accept')?.includes('text/html');
 
     let designation = '';
-    let stream = '';
+    let postId = '';
+    let stream = 'Engineering & Technology';
     let course = '';
     let specialization = '';
     let preferredCampus = '';
+    let preferredInstituteId = '';
     let salutation = 'Mr.';
     let fullName = '';
     let parentSpouseName = '';
@@ -63,9 +65,11 @@ export async function POST(request: NextRequest) {
     let dob = '';
     let maritalStatus = 'Single';
     let bloodGroup = '';
-    let category = 'OPEN';
+    let category = 'General (Open)';
     let religionCaste = '';
     let isPwd = false;
+    let pwdType = '';
+    let languagesKnown: string[] = [];
     let aadhaarNo = '';
     let panNo = '';
     let mobile = '';
@@ -73,74 +77,120 @@ export async function POST(request: NextRequest) {
     let addressCity = '';
     let addressTaluka = '';
     let addressDistrict = 'Kolhapur';
+    let stateName = 'Maharashtra';
     let pincode = '';
+    let permanentAddress = '';
+    let emergencyName = '';
+    let emergencyRelation = '';
+    let emergencyMobile = '';
+    let qualificationSummary = '';
+    let salaryExpectation = '';
     let isFresher = false;
-    let totalExpYears = '';
-    let totalExpMonths = '';
-    let lastOrganization = '';
-    let lastDesignation = '';
-    let lastSalary = '';
+    let teachingExpYears = '';
+    let teachingExpMonths = '';
+    let industryExpYears = '';
+    let industryExpMonths = '';
     let declarationAccepted = false;
-    let digitalSignature = '';
+    let declarationPlace = 'Ambap';
+    let signatureUrl = '';
 
     // Files
     let photoFile: File | null = null;
     let resumeFile: File | null = null;
+    let aadhaarFile: File | null = null;
+    let panFile: File | null = null;
 
-    // Qualifications
+    // Qualifications & Experiences
     let eduRows: Array<{
       level: string;
       degree_name: string;
       board_university: string;
       passing_year: string;
+      status_remark?: string;
       marking_system: string;
-      score: string;
-      percentage: string;
+      score?: string;
+      percentage?: string;
+      cgpa?: string;
+      cgpa_scale?: string;
+      file?: File | null;
+      doc_url?: string;
+    }> = [];
+
+    let expRows: Array<{
+      organization_name: string;
+      designation: string;
+      years_experience: string;
+      previous_salary: string;
     }> = [];
 
     if (contentType.includes('multipart/form-data') || contentType.includes('application/x-www-form-urlencoded')) {
       const formData = await request.formData();
 
+      postId = (formData.get('post_id') as string) || '';
       designation = (formData.get('designation') as string) || '';
-      stream = (formData.get('stream') as string) || '';
-      course = (formData.get('course') as string) || '';
+      stream = (formData.get('stream') as string) || (formData.get('program_stream') as string) || 'Engineering & Technology';
+      course = (formData.get('course') as string) || (formData.get('course_name') as string) || '';
       specialization = (formData.get('specialization') as string) || '';
       preferredCampus = (formData.get('preferred_campus') as string) || '';
+      preferredInstituteId = (formData.get('preferred_institute_id') as string) || '';
       salutation = (formData.get('salutation') as string) || 'Mr.';
-      fullName = (formData.get('full_name') as string) || '';
+      fullName = (formData.get('full_name') as string) || (formData.get('candidate_name') as string) || '';
       parentSpouseName = (formData.get('parent_spouse_name') as string) || '';
       gender = (formData.get('gender') as string) || 'Male';
       dob = (formData.get('dob') as string) || '';
       maritalStatus = (formData.get('marital_status') as string) || 'Single';
       bloodGroup = (formData.get('blood_group') as string) || '';
-      category = (formData.get('category') as string) || 'OPEN';
+      category = (formData.get('category') as string) || (formData.get('reservation_category') as string) || 'General (Open)';
       religionCaste = (formData.get('religion_caste') as string) || '';
+      
       const pwdVal = (formData.get('is_pwd') as string) || '';
       isPwd = pwdVal.toLowerCase() === 'yes' || pwdVal === 'true';
+      pwdType = (formData.get('pwd_type') as string) || '';
+
+      const langs = formData.getAll('languages_known');
+      if (langs && langs.length > 0) {
+        languagesKnown = langs.map((l) => l.toString());
+      } else {
+        const langStr = formData.get('languages_known') as string;
+        if (langStr) {
+          try {
+            languagesKnown = JSON.parse(langStr);
+          } catch {
+            languagesKnown = langStr.split(',').map((s) => s.trim());
+          }
+        }
+      }
 
       aadhaarNo = (formData.get('aadhaar_no') as string) || '';
       panNo = (formData.get('pan_no') as string) || '';
-      mobile = (formData.get('mobile') as string) || '';
-      email = (formData.get('email') as string) || '';
-      addressCity = (formData.get('address_city') as string) || '';
-      addressTaluka = (formData.get('address_taluka') as string) || '';
-      addressDistrict = (formData.get('address_district') as string) || '';
-      pincode = (formData.get('pincode') as string) || '';
+      mobile = (formData.get('mobile') as string) || (formData.get('contact_no') as string) || '';
+      email = (formData.get('email') as string) || (formData.get('email_id') as string) || '';
+      addressCity = (formData.get('address_city') as string) || (formData.get('village_city') as string) || '';
+      addressTaluka = (formData.get('address_taluka') as string) || (formData.get('taluka') as string) || '';
+      addressDistrict = (formData.get('address_district') as string) || (formData.get('district') as string) || 'Kolhapur';
+      stateName = (formData.get('state') as string) || 'Maharashtra';
+      pincode = (formData.get('pincode') as string) || (formData.get('pin_code') as string) || '';
+      permanentAddress = (formData.get('permanent_address') as string) || '';
+      emergencyName = (formData.get('emergency_contact_name') as string) || (formData.get('emergency_name') as string) || '';
+      emergencyRelation = (formData.get('emergency_contact_relation') as string) || (formData.get('emergency_relation') as string) || '';
+      emergencyMobile = (formData.get('emergency_contact_mobile') as string) || (formData.get('emergency_mobile') as string) || '';
+      qualificationSummary = (formData.get('qualification_summary') as string) || '';
+      salaryExpectation = (formData.get('salary_expectation') as string) || '';
 
       const fresherVal = (formData.get('is_fresher') as string) || '';
       isFresher = fresherVal.toLowerCase() === 'yes' || fresherVal === 'true' || fresherVal === 'on';
 
-      totalExpYears = (formData.get('total_exp_years') as string) || '';
-      totalExpMonths = (formData.get('total_exp_months') as string) || '';
-      lastOrganization = (formData.get('last_organization') as string) || '';
-      lastDesignation = (formData.get('last_designation') as string) || '';
-      lastSalary = (formData.get('last_salary') as string) || '';
+      teachingExpYears = (formData.get('total_teaching_exp_years') as string) || (formData.get('total_exp_years') as string) || '';
+      teachingExpMonths = (formData.get('total_teaching_exp_months') as string) || (formData.get('total_exp_months') as string) || '';
+      industryExpYears = (formData.get('total_industry_exp_years') as string) || '';
+      industryExpMonths = (formData.get('total_industry_exp_months') as string) || '';
 
-      const declVal = (formData.get('declaration') as string) || '';
+      const declVal = (formData.get('declaration') as string) || (formData.get('declaration_accepted') as string) || '';
       declarationAccepted = declVal === 'on' || declVal === 'true' || declVal === '1' || declVal === 'yes';
-      digitalSignature = (formData.get('digital_signature') as string) || '';
+      declarationPlace = (formData.get('declaration_place') as string) || 'Ambap';
+      signatureUrl = (formData.get('digital_signature') as string) || (formData.get('signature_url') as string) || '';
 
-      // Files
+      // Uploads
       const photo = formData.get('photo');
       if (photo && typeof photo === 'object' && 'name' in photo && (photo as File).size > 0) {
         photoFile = photo as File;
@@ -149,83 +199,137 @@ export async function POST(request: NextRequest) {
       if (resume && typeof resume === 'object' && 'name' in resume && (resume as File).size > 0) {
         resumeFile = resume as File;
       }
+      const aadhaarDoc = formData.get('aadhaar_file');
+      if (aadhaarDoc && typeof aadhaarDoc === 'object' && 'name' in aadhaarDoc && (aadhaarDoc as File).size > 0) {
+        aadhaarFile = aadhaarDoc as File;
+      }
+      const panDoc = formData.get('pan_file');
+      if (panDoc && typeof panDoc === 'object' && 'name' in panDoc && (panDoc as File).size > 0) {
+        panFile = panDoc as File;
+      }
 
-      // Educational qualifications table
-      eduRows = [
-        {
-          level: 'SSC (10th)',
-          degree_name: (formData.get('edu_degree_ssc') as string) || 'SSC',
-          board_university: (formData.get('edu_board_ssc') as string) || '',
-          passing_year: (formData.get('edu_year_ssc') as string) || '',
-          marking_system: (formData.get('edu_eval_ssc') as string) || 'Percentage',
-          score: (formData.get('edu_score_ssc') as string) || '',
-          percentage: (formData.get('edu_percentage_ssc') as string) || '',
-        },
-        {
-          level: 'HSC (12th) / Diploma',
-          degree_name: (formData.get('edu_degree_hsc') as string) || '',
-          board_university: (formData.get('edu_board_hsc') as string) || '',
-          passing_year: (formData.get('edu_year_hsc') as string) || '',
-          marking_system: (formData.get('edu_eval_hsc') as string) || 'Percentage',
-          score: (formData.get('edu_score_hsc') as string) || '',
-          percentage: (formData.get('edu_percentage_hsc') as string) || '',
-        },
-        {
-          level: 'Graduation / UG',
-          degree_name: (formData.get('edu_degree_ug') as string) || '',
-          board_university: (formData.get('edu_board_ug') as string) || '',
-          passing_year: (formData.get('edu_year_ug') as string) || '',
-          marking_system: (formData.get('edu_eval_ug') as string) || 'CGPA',
-          score: (formData.get('edu_score_ug') as string) || '',
-          percentage: (formData.get('edu_percentage_ug') as string) || '',
-        },
-        {
-          level: 'Post-Graduation / PG',
-          degree_name: (formData.get('edu_degree_pg') as string) || '',
-          board_university: (formData.get('edu_board_pg') as string) || '',
-          passing_year: (formData.get('edu_year_pg') as string) || '',
-          marking_system: (formData.get('edu_eval_pg') as string) || 'CGPA',
-          score: (formData.get('edu_score_pg') as string) || '',
-          percentage: (formData.get('edu_percentage_pg') as string) || '',
-        },
-      ];
+      // Check if education list was submitted as JSON
+      const eduJson = formData.get('education_list_json') as string;
+      if (eduJson) {
+        try {
+          eduRows = JSON.parse(eduJson);
+        } catch {
+          eduRows = [];
+        }
+      } else {
+        // Fallback for standard individual fields (SSC, HSC, UG, PG)
+        eduRows = [
+          {
+            level: 'S.S.C. (10th) / १०वी',
+            degree_name: (formData.get('edu_degree_ssc') as string) || 'SSC',
+            board_university: (formData.get('edu_board_ssc') as string) || '',
+            passing_year: (formData.get('edu_year_ssc') as string) || '',
+            marking_system: (formData.get('edu_eval_ssc') as string) || 'percentage',
+            score: (formData.get('edu_score_ssc') as string) || '',
+            percentage: (formData.get('edu_percentage_ssc') as string) || '',
+          },
+          {
+            level: 'H.S.C. (12th) / १२वी',
+            degree_name: (formData.get('edu_degree_hsc') as string) || 'HSC',
+            board_university: (formData.get('edu_board_hsc') as string) || '',
+            passing_year: (formData.get('edu_year_hsc') as string) || '',
+            marking_system: (formData.get('edu_eval_hsc') as string) || 'percentage',
+            score: (formData.get('edu_score_hsc') as string) || '',
+            percentage: (formData.get('edu_percentage_hsc') as string) || '',
+          },
+          {
+            level: 'Graduation (UG) / पदवी',
+            degree_name: (formData.get('edu_degree_ug') as string) || '',
+            board_university: (formData.get('edu_board_ug') as string) || '',
+            passing_year: (formData.get('edu_year_ug') as string) || '',
+            marking_system: (formData.get('edu_eval_ug') as string) || 'cgpa',
+            score: (formData.get('edu_score_ug') as string) || '',
+            percentage: (formData.get('edu_percentage_ug') as string) || '',
+          },
+          {
+            level: 'Post Graduation (PG) / पदव्युत्तर',
+            degree_name: (formData.get('edu_degree_pg') as string) || '',
+            board_university: (formData.get('edu_board_pg') as string) || '',
+            passing_year: (formData.get('edu_year_pg') as string) || '',
+            marking_system: (formData.get('edu_eval_pg') as string) || 'cgpa',
+            score: (formData.get('edu_score_pg') as string) || '',
+            percentage: (formData.get('edu_percentage_pg') as string) || '',
+          },
+        ];
+      }
+
+      // Check if experience list was submitted as JSON
+      const expJson = formData.get('experience_list_json') as string;
+      if (expJson) {
+        try {
+          expRows = JSON.parse(expJson);
+        } catch {
+          expRows = [];
+        }
+      } else {
+        const lastOrg = (formData.get('last_organization') as string) || '';
+        const lastDesig = (formData.get('last_designation') as string) || '';
+        const lastSal = (formData.get('last_salary') as string) || '';
+        if (lastOrg || lastDesig) {
+          expRows = [{
+            organization_name: lastOrg,
+            designation: lastDesig,
+            years_experience: teachingExpYears,
+            previous_salary: lastSal,
+          }];
+        }
+      }
     } else {
       // JSON Payload
       const body = await request.json();
+      postId = body.post_id || '';
       designation = body.designation || '';
-      stream = body.stream || '';
-      course = body.course || '';
+      stream = body.stream || body.program_stream || 'Engineering & Technology';
+      course = body.course || body.course_name || '';
       specialization = body.specialization || '';
       preferredCampus = body.preferred_campus || '';
+      preferredInstituteId = body.preferred_institute_id || '';
       salutation = body.salutation || 'Mr.';
-      fullName = body.full_name || '';
+      fullName = body.full_name || body.candidate_name || '';
       parentSpouseName = body.parent_spouse_name || '';
       gender = body.gender || 'Male';
       dob = body.dob || '';
       maritalStatus = body.marital_status || 'Single';
       bloodGroup = body.blood_group || '';
-      category = body.category || 'OPEN';
+      category = body.category || body.reservation_category || 'General (Open)';
       religionCaste = body.religion_caste || '';
       isPwd = Boolean(body.is_pwd === 'Yes' || body.is_pwd === true);
+      pwdType = body.pwd_type || '';
+      languagesKnown = Array.isArray(body.languages_known) ? body.languages_known : [];
       aadhaarNo = body.aadhaar_no || '';
       panNo = body.pan_no || '';
-      mobile = body.mobile || '';
-      email = body.email || '';
-      addressCity = body.address_city || '';
-      addressTaluka = body.address_taluka || '';
-      addressDistrict = body.address_district || '';
-      pincode = body.pincode || '';
+      mobile = body.mobile || body.contact_no || '';
+      email = body.email || body.email_id || '';
+      addressCity = body.address_city || body.village_city || '';
+      addressTaluka = body.address_taluka || body.taluka || '';
+      addressDistrict = body.address_district || body.district || 'Kolhapur';
+      stateName = body.state || 'Maharashtra';
+      pincode = body.pincode || body.pin_code || '';
+      permanentAddress = body.permanent_address || '';
+      emergencyName = body.emergency_contact_name || body.emergency_name || '';
+      emergencyRelation = body.emergency_contact_relation || body.emergency_relation || '';
+      emergencyMobile = body.emergency_contact_mobile || body.emergency_mobile || '';
+      qualificationSummary = body.qualification_summary || '';
+      salaryExpectation = body.salary_expectation?.toString() || '';
       isFresher = Boolean(body.is_fresher === 'Yes' || body.is_fresher === true);
-      totalExpYears = body.total_exp_years?.toString() || '';
-      totalExpMonths = body.total_exp_months?.toString() || '';
-      lastOrganization = body.last_organization || '';
-      lastDesignation = body.last_designation || '';
-      lastSalary = body.last_salary?.toString() || '';
-      declarationAccepted = Boolean(body.declaration);
-      digitalSignature = body.digital_signature || '';
+      teachingExpYears = body.total_teaching_exp_years?.toString() || body.total_exp_years?.toString() || '';
+      teachingExpMonths = body.total_teaching_exp_months?.toString() || body.total_exp_months?.toString() || '';
+      industryExpYears = body.total_industry_exp_years?.toString() || '';
+      industryExpMonths = body.total_industry_exp_months?.toString() || '';
+      declarationAccepted = Boolean(body.declaration || body.declaration_accepted);
+      declarationPlace = body.declaration_place || 'Ambap';
+      signatureUrl = body.digital_signature || body.signature_url || '';
 
-      if (Array.isArray(body.qualifications)) {
-        eduRows = body.qualifications;
+      if (Array.isArray(body.education_list)) {
+        eduRows = body.education_list;
+      }
+      if (Array.isArray(body.experience_list)) {
+        expRows = body.experience_list;
       }
     }
 
@@ -266,12 +370,20 @@ export async function POST(request: NextRequest) {
     // ─── UPLOAD ATTACHMENTS ──────────────────────────────────────────────────
     let photoUrl = '';
     let resumeUrl = '';
+    let aadhaarDocUrl = '';
+    let panDocUrl = '';
 
     if (photoFile) {
       photoUrl = await uploadFileBuffer('candidate-photos', photoFile, 'remote_photo');
     }
     if (resumeFile) {
       resumeUrl = await uploadFileBuffer('candidate-resumes', resumeFile, `${generatedTempId}_resume`);
+    }
+    if (aadhaarFile) {
+      aadhaarDocUrl = await uploadFileBuffer('candidate-documents', aadhaarFile, `${generatedTempId}_aadhaar`);
+    }
+    if (panFile) {
+      panDocUrl = await uploadFileBuffer('candidate-documents', panFile, `${generatedTempId}_pan`);
     }
 
     // ─── MASKS & FORMATTING ──────────────────────────────────────────────────
@@ -281,11 +393,23 @@ export async function POST(request: NextRequest) {
     const formattedCandidateName = salutation ? `${salutation} ${toTitleCase(fullName)}` : toTitleCase(fullName);
 
     // ─── RESOLVE POST & CATEGORY ─────────────────────────────────────────────
-    let resolvedPostId: string | null = null;
+    let resolvedPostId: string | null = postId || null;
     let resolvedCategoryId: string | null = null;
+    let resolvedTitle = designation || '';
 
     try {
-      if (designation) {
+      if (postId) {
+        const { data: postRecord } = await supabase
+          .from('posts')
+          .select('id, category_id, title')
+          .eq('id', postId)
+          .maybeSingle();
+        if (postRecord) {
+          resolvedPostId = postRecord.id;
+          resolvedCategoryId = postRecord.category_id;
+          resolvedTitle = postRecord.title;
+        }
+      } else if (designation) {
         const { data: matchedPost } = await supabase
           .from('posts')
           .select('id, category_id, title')
@@ -296,8 +420,9 @@ export async function POST(request: NextRequest) {
         if (matchedPost) {
           resolvedPostId = matchedPost.id;
           resolvedCategoryId = matchedPost.category_id;
+          resolvedTitle = matchedPost.title;
         } else {
-          // Check staff category based on title
+          // Resolve category from designation
           const isTeaching = designation.toUpperCase().includes('PROFESSOR') ||
             designation.toUpperCase().includes('DIRECTOR') ||
             designation.toUpperCase().includes('LIBRARIAN');
@@ -318,8 +443,8 @@ export async function POST(request: NextRequest) {
     }
 
     // ─── RESOLVE PREFERRED INSTITUTE ─────────────────────────────────────────
-    let resolvedInstituteId: string | null = null;
-    if (preferredCampus && preferredCampus !== 'Any Sanstha Campus') {
+    let resolvedInstituteId: string | null = preferredInstituteId || null;
+    if (!resolvedInstituteId && preferredCampus && preferredCampus !== 'Any Sanstha Campus') {
       try {
         const { data: matchedInst } = await supabase
           .from('institutes')
@@ -340,7 +465,7 @@ export async function POST(request: NextRequest) {
       addressCity,
       addressTaluka && `Taluka ${addressTaluka}`,
       addressDistrict && `District ${addressDistrict}`,
-      'Maharashtra',
+      stateName || 'Maharashtra',
       pincode && `PIN ${pincode}`,
     ]
       .filter(Boolean)
@@ -353,7 +478,7 @@ export async function POST(request: NextRequest) {
       source_type: 'ONLINE_REMOTE',
       registration_status: 'DRAFT_PENDING_FEE',
       post_id: resolvedPostId,
-      custom_post_title: designation || null,
+      custom_post_title: resolvedTitle || designation || null,
       category_id: resolvedCategoryId,
       program_stream: stream || 'Engineering & Technology',
       course_name: toSmartTitleCase(course) || null,
@@ -367,8 +492,9 @@ export async function POST(request: NextRequest) {
       village_city: toTitleCase(addressCity) || null,
       taluka: toTitleCase(addressTaluka) || null,
       district: toTitleCase(addressDistrict) || 'Kolhapur',
-      state: 'Maharashtra',
+      state: toTitleCase(stateName) || 'Maharashtra',
       pin_code: pincode.trim() || null,
+      permanent_address: permanentAddress ? toTitleCase(permanentAddress) : fullAddress,
       contact_no: cleanMobile,
       email_id: toCleanEmail(email) || null,
       dob: dob || null,
@@ -380,22 +506,33 @@ export async function POST(request: NextRequest) {
       reservation_category: category || null,
       religion_caste: toTitleCase(religionCaste) || null,
       is_pwd: isPwd,
+      pwd_type: isPwd ? pwdType.trim() || null : null,
+      languages_known: languagesKnown.length > 0 ? languagesKnown : null,
+      emergency_contact_name: toTitleCase(emergencyName) || null,
+      emergency_contact_relation: toTitleCase(emergencyRelation) || null,
+      emergency_contact_mobile: emergencyMobile ? emergencyMobile.replace(/\D/g, '') : null,
       aadhaar_masked: maskedAadhaar,
       aadhaar_full: cleanAadhaar,
+      aadhaar_doc_url: aadhaarDocUrl || null,
       pan_masked: maskedPan || null,
       pan_full: cleanPan || null,
+      pan_doc_url: panDocUrl || null,
       resume_url: resumeUrl || null,
+      qualification_summary: toSmartTitleCase(qualificationSummary) || null,
+      salary_expectation: salaryExpectation ? parseFloat(salaryExpectation) : null,
       declaration_accepted: true,
-      signature_url: digitalSignature ? `typed:${toTitleCase(digitalSignature)}` : `typed:${formattedCandidateName}`,
-      declaration_place: toTitleCase(addressCity) || 'Online Remote',
+      signature_url: signatureUrl ? (signatureUrl.startsWith('data:') ? signatureUrl : `typed:${toTitleCase(signatureUrl)}`) : `typed:${formattedCandidateName}`,
+      declaration_place: toTitleCase(declarationPlace) || 'Ambap',
       declaration_date: new Date().toISOString().split('T')[0],
       status: 'submitted',
       submission_channel: 'online_remote',
-      total_teaching_exp_years: totalExpYears ? parseFloat(totalExpYears) : null,
-      total_teaching_exp_months: totalExpMonths ? parseInt(totalExpMonths) : null,
-      last_organization: toTitleCase(lastOrganization) || null,
-      last_designation: toTitleCase(lastDesignation) || null,
-      last_salary: lastSalary ? parseFloat(lastSalary) : null,
+      total_teaching_exp_years: teachingExpYears ? parseFloat(teachingExpYears) : null,
+      total_teaching_exp_months: teachingExpMonths ? parseInt(teachingExpMonths, 10) : null,
+      total_industry_exp_years: industryExpYears ? parseFloat(industryExpYears) : null,
+      total_industry_exp_months: industryExpMonths ? parseInt(industryExpMonths, 10) : null,
+      last_organization: expRows[0]?.organization_name ? toTitleCase(expRows[0].organization_name) : null,
+      last_designation: expRows[0]?.designation ? toTitleCase(expRows[0].designation) : null,
+      last_salary: expRows[0]?.previous_salary ? parseFloat(expRows[0].previous_salary) : null,
     };
 
     // ─── INSERT APPLICATION (WITH SAFE RETRY FALLBACK) ────────────────────────
@@ -419,6 +556,7 @@ export async function POST(request: NextRequest) {
       delete fallbackPayload.last_designation;
       delete fallbackPayload.last_salary;
       delete fallbackPayload.total_teaching_exp_months;
+      delete fallbackPayload.total_industry_exp_months;
 
       if (insertError.message.includes('temp_id') || insertError.message.includes('source_type') || insertError.message.includes('registration_status')) {
         delete fallbackPayload.temp_id;
@@ -448,21 +586,41 @@ export async function POST(request: NextRequest) {
     // ─── INSERT EDUCATIONAL DETAILS ──────────────────────────────────────────
     if (eduRows && eduRows.length > 0) {
       for (const edu of eduRows) {
-        if (edu.degree_name?.trim() || edu.board_university?.trim() || edu.percentage?.toString().trim() || edu.score?.trim()) {
+        const hasContent =
+          Boolean(edu.percentage) ||
+          Boolean(edu.cgpa) ||
+          Boolean(edu.score) ||
+          Boolean(edu.board_university?.trim()) ||
+          Boolean(edu.passing_year?.trim()) ||
+          (Boolean(edu.degree_name?.trim()) && !['SSC', 'HSC'].includes(edu.degree_name.trim()));
+
+        if (hasContent) {
           try {
+            const markingSys = (edu.marking_system || 'percentage').toLowerCase();
+            const pct = markingSys === 'percentage' && edu.percentage
+              ? parseFloat(edu.percentage)
+              : (edu.cgpa ? parseFloat(edu.cgpa) * 10 : (edu.percentage ? parseFloat(edu.percentage) : null));
+
             const eduPayload: Record<string, any> = {
               application_id: newApp.id,
               level: edu.level,
-              degree_name: toSmartTitleCase(edu.degree_name) || edu.level,
+              degree_name: toSmartTitleCase(edu.degree_name) || (edu.level.includes('Below 10th') ? 'Non-Matric / Below 10th' : edu.level.includes('S.S.C') ? 'SSC' : edu.level.includes('H.S.C') ? 'HSC' : edu.level),
               board_university: toSmartTitleCase(edu.board_university) || null,
               passing_year: edu.passing_year?.trim() || null,
-              marking_system: (edu.marking_system || 'percentage').toLowerCase(),
+              status_remark: edu.status_remark || null,
+              marking_system: markingSys,
+              percentage: pct,
+              cgpa: markingSys === 'cgpa' && edu.cgpa ? parseFloat(edu.cgpa) : null,
+              cgpa_scale: markingSys === 'cgpa' && edu.cgpa_scale ? parseFloat(edu.cgpa_scale) : 10,
               score: edu.score?.trim() || null,
-              percentage: edu.percentage ? parseFloat(edu.percentage.toString()) : null,
+              doc_url: edu.doc_url || null,
             };
 
             const { error: eduErr } = await supabase.from('application_education').insert(eduPayload);
-            if (eduErr && eduErr.message.includes('score')) {
+            if (eduErr && (eduErr.message.includes('marking_system') || eduErr.message.includes('cgpa') || eduErr.message.includes('score'))) {
+              delete eduPayload.marking_system;
+              delete eduPayload.cgpa;
+              delete eduPayload.cgpa_scale;
               delete eduPayload.score;
               await supabase.from('application_education').insert(eduPayload);
             }
@@ -474,24 +632,36 @@ export async function POST(request: NextRequest) {
     }
 
     // ─── INSERT EXPERIENCE DETAILS ───────────────────────────────────────────
-    if (!isFresher && (lastOrganization.trim() || lastDesignation.trim() || totalExpYears)) {
+    if (!isFresher && expRows && expRows.length > 0) {
+      for (const exp of expRows) {
+        if (exp.organization_name?.trim() || exp.designation?.trim()) {
+          try {
+            await supabase.from('application_experience').insert({
+              application_id: newApp.id,
+              is_fresher: false,
+              organization_name: toSmartTitleCase(exp.organization_name),
+              designation: toTitleCase(exp.designation),
+              years_experience: exp.years_experience ? parseFloat(exp.years_experience) : null,
+              previous_salary: exp.previous_salary ? parseFloat(exp.previous_salary) : null,
+            });
+          } catch (e) {
+            console.warn('Experience insert warning in /api/apply/online:', e);
+          }
+        }
+      }
+    } else {
       try {
         await supabase.from('application_experience').insert({
           application_id: newApp.id,
-          is_fresher: false,
-          organization_name: toTitleCase(lastOrganization) || null,
-          designation: toTitleCase(lastDesignation) || null,
-          years_experience: totalExpYears ? parseFloat(totalExpYears) : null,
-          total_exp_months: totalExpMonths ? parseInt(totalExpMonths) : null,
-          previous_salary: lastSalary ? parseFloat(lastSalary) : null,
+          is_fresher: true,
         });
       } catch (e) {
-        console.warn('Experience insert warning in /api/apply/online:', e);
+        console.warn('Experience insert fresher warning:', e);
       }
     }
 
     // ─── RETURN RESPONSE (REDIRECT FOR HTML FORM OR JSON FOR FETCH) ──────────
-    const prescribedFee = 50; // Standard prescribed pre-registration fee collected at front desk
+    const prescribedFee = 50; // Standard pre-registration fee settled physically at front desk
 
     if (acceptsHtml) {
       const redirectUrl = new URL('/apply/online', request.url);
@@ -499,7 +669,7 @@ export async function POST(request: NextRequest) {
       redirectUrl.searchParams.set('temp_id', generatedTempId);
       redirectUrl.searchParams.set('app_no', generatedAppNo);
       redirectUrl.searchParams.set('name', formattedCandidateName);
-      redirectUrl.searchParams.set('post', designation);
+      redirectUrl.searchParams.set('post', resolvedTitle || designation);
       redirectUrl.searchParams.set('stream', stream);
       redirectUrl.searchParams.set('mobile', cleanMobile);
       redirectUrl.searchParams.set('fee', prescribedFee.toString());
@@ -511,7 +681,7 @@ export async function POST(request: NextRequest) {
       temp_id: generatedTempId,
       application_no: generatedAppNo,
       candidate_name: formattedCandidateName,
-      designation: designation,
+      designation: resolvedTitle || designation,
       program_stream: stream,
       contact_no: cleanMobile,
       fee: prescribedFee,
