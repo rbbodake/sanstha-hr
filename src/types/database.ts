@@ -171,6 +171,7 @@ export type ApplicationEducation = {
   passing_year?: string; // Year of passing (e.g. 2018, 2023)
   percentage?: number;
   marking_system?: 'percentage' | 'cgpa';
+  score?: string; // Obtained / Total marks or CGPA string
   cgpa?: number;
   cgpa_scale?: number;
   status_remark?: string; // 'Awarded' | 'Pursuing (Scholar)' for Ph.D. or 'Qualified' | 'Not Qualified' for NET/SET/GATE
@@ -185,6 +186,7 @@ export type ApplicationExperience = {
   organization_name?: string;
   designation?: string;
   years_experience?: number;
+  total_exp_months?: number;
   previous_salary?: number;
 };
 
@@ -198,7 +200,9 @@ export type Application = {
   course_name?: string; // Course / Programme (e.g. B.Tech Computer Science, MBA, B.Pharm)
   specialization?: string; // Subject / Specialization (e.g. AI & ML, Pharmacognosy, Finance)
   preferred_institute_id?: string;
+  preferred_campus?: string;
   candidate_name: string;
+  parent_spouse_name?: string;
   photo_url?: string;
   address: string;
   village_city?: string;
@@ -211,9 +215,11 @@ export type Application = {
   dob?: string;
   age?: number;
   is_married: boolean;
+  marital_status?: string;
   gender?: string;
   blood_group?: string;
   reservation_category?: string;
+  religion_caste?: string;
   is_pwd?: boolean;
   pwd_type?: string;
   languages_known?: string[];
@@ -225,6 +231,9 @@ export type Application = {
   total_teaching_exp_months?: number;
   total_industry_exp_years?: number;
   total_industry_exp_months?: number;
+  last_organization?: string;
+  last_designation?: string;
+  last_salary?: number;
   aadhaar_masked: string;
   aadhaar_full?: string;
   aadhaar_doc_url?: string;
