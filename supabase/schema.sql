@@ -127,6 +127,14 @@ CREATE TABLE IF NOT EXISTS applications (
     
     -- Status Workflow
     status VARCHAR(50) DEFAULT 'submitted', -- 'submitted', 'verified_approved', 'fee_paid', 'rejected'
+
+    -- Remote Pre-Registration & Settlement Fields
+    source_type VARCHAR(50) DEFAULT 'WALKIN_DESK', -- 'WALKIN_DESK', 'ONLINE_REMOTE'
+    registration_status VARCHAR(50) DEFAULT 'COMPLETED_PAID', -- 'DRAFT_PENDING_FEE', 'COMPLETED_PAID'
+    temp_id VARCHAR(50) UNIQUE, -- e.g. 'TMP-2026-00001' for remote pre-registered candidates
+    fee_receipt_no VARCHAR(100),
+    collected_by_user_id UUID REFERENCES user_profiles(id),
+    collected_at TIMESTAMP WITH TIME ZONE,
     
     -- Submission metadata
     submission_channel VARCHAR(30) DEFAULT 'qr_self', -- 'qr_self', 'receptionist_entry'

@@ -156,3 +156,80 @@ export async function generateStandardApplicationNumber(date: Date = new Date())
   // 3. Fallback: First entry in current month starts at 00001
   return `${standardPrefix}-00001`;
 }
+
+/**
+ * Checks whether a given string is a formatted or unformatted Temporary ID
+ */
+export function isTemporaryId(query: string | null | undefined): boolean {
+  if (!query) return false;
+  const clean = query.trim().toUpperCase().replace(/[-\s]/g, '');
+  return clean.startsWith('TMP') || clean.startsWith('TEMP');
+}
+
+/**
+ * Matcher for Temporary Application IDs (e.g. TMP-2026-00001)
+ */
+export function matchesTempIdSearch(tempId: string | null | undefined, searchTerm: string): boolean {
+  if (!tempId || !searchTerm) return false;
+  const cleanId = tempId.toLowerCase();
+  const cleanSearch = searchTerm.trim().toLowerCase();
+
+  if (cleanId.includes(cleanSearch)) return true;
+
+  const idNoHyphen = cleanId.replace(/[-\s]/g, '');
+  const searchNoHyphen = cleanSearch.replace(/[-\s]/g, '');
+  if (searchNoHyphen.length > 2 && idNoHyphen.includes(searchNoHyphen)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Generates an atomic or high-concurrency Temporary Application ID (TMP-YYYY-XXXXX).
+ * Used exclusively for remote candidate online pre-registrations prior to physical walk-in fee settlement.
+ */
+export async function generateTemporaryApplicationId(date: Date = new Date()): Promise<string> {
+  const currentYear = date.getFullYear();
+  const prefix = `TMP-${currentYear}`;
+
+  // 1. Try PostgreSQL RPC if configured
+  try {
+    const { data: rpcData, error: rpcError } = await supabase.rpc('generate_next_temp_id');
+    if (!rpcError && rpcData && typeof rpcData === 'string' && rpcData.startsWith('TMP-')) {
+      return rpcData;
+    }
+  } catch (err) {
+    // Non-fatal, proceed to query fallback
+  }
+
+  // 2. Query highest temp_id in current year
+  try {
+    const { data, error } = await supabase
+      .from('applications')
+      .select('temp_id')
+      .like('temp_id', `${prefix}-%`)
+      .order('temp_id', { ascending: false })
+      .limit(20);
+
+    if (!error && data && data.length > 0) {
+      let maxSeq = 0;
+      for (const row of data) {
+        if (!row.temp_id) continue;
+        const parts = row.temp_id.split('-');
+        const seq = parseInt(parts[parts.length - 1], 10);
+        if (!isNaN(seq) && seq > maxSeq) {
+          maxSeq = seq;
+        }
+      }
+      const nextSeq = maxSeq + 1;
+      return `${prefix}-${String(nextSeq).padStart(5, '0')}`;
+    }
+  } catch (err) {
+    console.warn('Fallback sequence lookup for temp_id:', err);
+  }
+
+  // 3. High entropy fallback with timestamp if table is empty or error
+  return `${prefix}-00001`;
+}
+

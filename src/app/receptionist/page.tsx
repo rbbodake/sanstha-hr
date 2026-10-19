@@ -10,8 +10,9 @@ import { NotificationBell } from '@/components/NotificationBell';
 import { useAuth } from '@/context/AuthContext';
 import { numberToWordsINR } from '@/lib/numberToWords';
 import { toTitleCase, toSmartTitleCase, toCleanEmail, toCleanPAN } from '@/lib/stringUtils';
-import { matchesApplicationNumberSearch, parseApplicationNumber } from '@/lib/applicationNumberService';
+import { matchesApplicationNumberSearch, parseApplicationNumber, matchesTempIdSearch, isTemporaryId } from '@/lib/applicationNumberService';
 import { forwardApplicationToInstitute, mergeApplicationOverrides, grantManagementApproval, pushDossierDownstream } from '@/lib/workflowService';
+import { settleFrontDeskFee, lookupCandidateForFrontDesk } from '@/lib/remoteCandidateService';
 import {
   UserCheck,
   Search,
@@ -50,7 +51,10 @@ import {
   Mail,
   PauseCircle,
   Award,
-  ShieldCheck
+  ShieldCheck,
+  Globe,
+  Copy,
+  Check
 } from 'lucide-react';
 
 const programStreamOptions = [
@@ -180,7 +184,7 @@ export default function ReceptionistDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [locationFilters, setLocationFilters] = useState({ village_city: '', taluka: '', district: '', state: '', pin_code: '' });
   const [statusFilter, setStatusFilter] = useState<
-    'all' | 'submitted' | 'verified_approved' | 'fee_paid' | 'forwarded_to_institute' | 'ready_for_physical_interview' | 'selected_recommended' | 'management_approved' | 'hold' | 'rejected' | 'multiple_submissions'
+    'all' | 'submitted' | 'verified_approved' | 'fee_paid' | 'forwarded_to_institute' | 'ready_for_physical_interview' | 'selected_recommended' | 'management_approved' | 'hold' | 'rejected' | 'multiple_submissions' | 'online_remote_pending'
   >('all');
   const [streamFilter, setStreamFilter] = useState<string>('all');
 
@@ -318,6 +322,145 @@ export default function ReceptionistDashboard() {
 
   // Printable Candidate Form State
   const [printFormApp, setPrintFormApp] = useState<Application | null>(null);
+
+  // ── Remote Candidate Walk-in Settlement State ──────────────────────────────
+  const [deskLookupModalOpen, setDeskLookupModalOpen] = useState(false);
+  const [deskLookupQuery, setDeskLookupQuery] = useState('');
+  const [isSearchingDesk, setIsSearchingDesk] = useState(false);
+  const [deskSearchResults, setDeskSearchResults] = useState<Application[]>([]);
+  const [deskSearchError, setDeskSearchError] = useState<string | null>(null);
+
+  // Process Fee & Convert Modal State
+  const [settleModalApp, setSettleModalApp] = useState<Application | null>(null);
+  const [settleFeeAmount, setSettleFeeAmount] = useState<number>(0);
+  const [settlePaymentMode, setSettlePaymentMode] = useState<string>('Cash');
+  const [settlePaymentRefNo, setSettlePaymentRefNo] = useState<string>('');
+  const [settleReceiptNo, setSettleReceiptNo] = useState<string>('');
+  const [settleRemarks, setSettleRemarks] = useState<string>('');
+  const [isSettlingFee, setIsSettlingFee] = useState<boolean>(false);
+  const [settleVerifyId, setSettleVerifyId] = useState<boolean>(true);
+  const [settleVerifyDocs, setSettleVerifyDocs] = useState<boolean>(true);
+  const [settleSuccessToast, setSettleSuccessToast] = useState<string | null>(null);
+
+  const generateDeskReceiptNo = async (): Promise<string> => {
+    try {
+      const { data: seqData, error: seqError } = await supabase.rpc('get_next_sequence_number', {
+        p_series_type: 'fee_receipt'
+      });
+      if (!seqError && seqData) return seqData;
+    } catch {}
+
+    const currentYear = new Date().getFullYear();
+    const prefix = org?.fee_receipt_prefix || 'FR';
+    const randomSeq = Math.floor(10000 + Math.random() * 90000);
+    return `${prefix}-${currentYear}-${randomSeq}`;
+  };
+
+  const handleOpenSettleModal = async (app: Application) => {
+    const fee = app.staff_categories?.application_fee ?? 200;
+    setSettleFeeAmount(fee);
+    setSettlePaymentMode('Cash');
+    setSettlePaymentRefNo('');
+    setSettleRemarks('Original credentials verified at Front Desk. Candidate pre-registration converted to verified fee_paid.');
+    setSettleVerifyId(true);
+    setSettleVerifyDocs(true);
+    setSettleModalApp(app);
+
+    const nextReceipt = await generateDeskReceiptNo();
+    setSettleReceiptNo(nextReceipt);
+  };
+
+  const handleDeskSearch = async (queryText?: string) => {
+    const q = (queryText !== undefined ? queryText : deskLookupQuery).trim();
+    if (!q || q.length < 3) {
+      setDeskSearchError('Please enter at least 3 characters (Phone, Aadhaar, or Temporary ID).');
+      setDeskSearchResults([]);
+      return;
+    }
+    setDeskSearchError(null);
+    setIsSearchingDesk(true);
+    try {
+      const results = await lookupCandidateForFrontDesk(q, role);
+      setDeskSearchResults(results);
+      if (results.length === 0) {
+        setDeskSearchError(`No matching candidate found for "${q}". Please check the Phone, Aadhaar, or Temp ID.`);
+      }
+    } catch (e: any) {
+      setDeskSearchError(e.message || 'Error searching candidate');
+    } finally {
+      setIsSearchingDesk(false);
+    }
+  };
+
+  const handleConfirmSettleFee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!settleModalApp) return;
+
+    if (!settleReceiptNo.trim()) {
+      alert('Official receipt number is required.');
+      return;
+    }
+    if (!settleVerifyId || !settleVerifyDocs) {
+      alert('Please confirm that candidate physical photo identification and educational documents have been inspected at the desk.');
+      return;
+    }
+
+    setIsSettlingFee(true);
+    try {
+      const result = await settleFrontDeskFee({
+        applicationId: settleModalApp.id,
+        receiptNo: settleReceiptNo.trim(),
+        amount: settleFeeAmount,
+        paymentMode: settlePaymentMode,
+        referenceNo: settlePaymentRefNo.trim(),
+        collectedByName: 'Front Desk Officer',
+        remarks: settleRemarks.trim(),
+        callerRole: role,
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || 'Fee settlement failed.');
+      }
+
+      // Automatically launch printed duplicate receipt
+      const amountWords = numberToWordsINR(settleFeeAmount);
+      setPrintedReceipt({
+        receipt_no: settleReceiptNo.trim(),
+        app: {
+          ...settleModalApp,
+          status: 'fee_paid',
+          registration_status: 'COMPLETED_PAID',
+        },
+        amount: settleFeeAmount,
+        amount_in_words: amountWords,
+        payment_mode: settlePaymentMode,
+        reference_no: settlePaymentRefNo,
+        date: new Date().toLocaleDateString('en-GB'),
+      });
+
+      setSettleSuccessToast(`Pre-registration ${settleModalApp.temp_id || settleModalApp.application_no} successfully settled & converted to verified active candidate.`);
+      setSettleModalApp(null);
+      setDeskLookupModalOpen(false);
+      await fetchData();
+    } catch (err: any) {
+      alert(err.message || 'Error processing settlement');
+    } finally {
+      setIsSettlingFee(false);
+    }
+  };
+
+  // URL query param handler to auto-open Desk Lookup
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const query = params.get('lookup');
+      if (query) {
+        setDeskLookupModalOpen(true);
+        setDeskLookupQuery(query);
+        handleDeskSearch(query);
+      }
+    }
+  }, []);
 
   // Row Actions Popover Menu State
   const [menuAnchor, setMenuAnchor] = useState<{
@@ -508,6 +651,24 @@ export default function ReceptionistDashboard() {
 
   // Filter Logic
   const filteredApplications = applications.filter((app) => {
+    const isRemotePending = app.source_type === 'ONLINE_REMOTE' && app.registration_status === 'DRAFT_PENDING_FEE';
+
+    // RBAC Separation: Unverified online pre-registrations are kept strictly separate from standard walk-in applications.
+    // Front Desk staff cannot browse unverified remote pre-registrations in the general table (they use Desk Lookup upon walk-in arrival).
+    if (!isAdminHR && isRemotePending) {
+      return false;
+    }
+
+    if (statusFilter === 'online_remote_pending') {
+      if (!isAdminHR) return false;
+      return isRemotePending;
+    }
+
+    // In general 'all' or standard workflow tabs, unverified remote pre-registrations are kept separate until settled
+    if (isRemotePending) {
+      return false;
+    }
+
     const matchesStatus =
       statusFilter === 'all'
         ? true
@@ -528,6 +689,7 @@ export default function ReceptionistDashboard() {
     const matchesSearch =
       app.candidate_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       matchesApplicationNumberSearch(app.application_no, searchTerm) ||
+      (app.temp_id && matchesTempIdSearch(app.temp_id, searchTerm)) ||
       app.application_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
       app.contact_no.includes(searchTerm) ||
       (app.email_id && app.email_id.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -1285,6 +1447,19 @@ export default function ReceptionistDashboard() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setDeskLookupModalOpen(true);
+                setDeskLookupQuery('');
+                setDeskSearchResults([]);
+                setDeskSearchError(null);
+              }}
+              className="px-3.5 py-2 border-2 border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100 rounded-xl text-xs font-bold transition shadow-sm flex items-center gap-1.5"
+              title="Remote Candidate Walk-in Settlement & Fee Collection"
+            >
+              <Globe className="w-3.5 h-3.5 text-amber-600" /> Remote Settlement
+            </button>
             <Link
               href="/apply"
               target="_blank"
@@ -1561,6 +1736,20 @@ export default function ReceptionistDashboard() {
               <AlertTriangle className="w-3 h-3" />
               Multi-Submissions ({multipleSubmissionsCount})
             </button>
+            {isAdminHR && (
+              <button
+                onClick={() => setStatusFilter(statusFilter === 'online_remote_pending' ? 'all' : 'online_remote_pending')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
+                  statusFilter === 'online_remote_pending'
+                    ? 'bg-amber-600 text-white shadow-sm ring-2 ring-amber-400'
+                    : 'bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100'
+                }`}
+                title="Central HR exclusive view of remote online pre-registrations pending fee"
+              >
+                <Globe className="w-3.5 h-3.5 text-amber-600" />
+                Online Pre-Reg ({applications.filter(a => a.source_type === 'ONLINE_REMOTE' && a.registration_status === 'DRAFT_PENDING_FEE').length})
+              </button>
+            )}
           </div>
         </div>
 
@@ -5402,6 +5591,429 @@ export default function ReceptionistDashboard() {
           </div>
           <button
             onClick={() => setMgmtSuccessToast(null)}
+            className="text-slate-400 hover:text-white p-1 rounded-lg ml-auto"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────────────────
+          1. REMOTE CANDIDATE LOOKUP MODAL (FRONT DESK WALK-IN SETTLEMENT)
+          ───────────────────────────────────────────────────────────────────────────── */}
+      {deskLookupModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-3xl w-full p-6 sm:p-8 space-y-6 max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center shadow-inner">
+                  <Globe className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base sm:text-lg text-slate-900">
+                    Remote Candidate Walk-in Settlement
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Query online pre-registered candidates by Mobile, Aadhaar, or Temporary ID to collect fee and activate dossier.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeskLookupModalOpen(false)}
+                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Search Bar */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleDeskSearch();
+              }}
+              className="space-y-2"
+            >
+              <label className="block text-xs font-bold text-slate-700">
+                Candidate Identification Search <span className="text-rose-500">*</span>
+              </label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={deskLookupQuery}
+                    onChange={(e) => setDeskLookupQuery(e.target.value)}
+                    placeholder="Enter 10-digit Mobile, 12-digit Aadhaar, or Temp ID (TMP-2026-...)"
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-none transition"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isSearchingDesk}
+                  className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition shadow flex items-center gap-2 disabled:opacity-50"
+                >
+                  {isSearchingDesk ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Searching...
+                    </>
+                  ) : (
+                    <>
+                      <Search className="w-4 h-4" /> Search
+                    </>
+                  )}
+                </button>
+              </div>
+              <span className="text-[10px] text-slate-500 block">
+                ★ Examples: <code className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-800">TMP-2026-00001</code>, <code className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-800">9876543210</code>, or <code className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-800">123456789012</code>
+              </span>
+            </form>
+
+            {deskSearchError && (
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+                {deskSearchError}
+              </div>
+            )}
+
+            {/* Results List */}
+            <div className="space-y-3 pt-2">
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-500">
+                Search Results ({deskSearchResults.length})
+              </h4>
+
+              {deskSearchResults.length === 0 && !isSearchingDesk && !deskSearchError && (
+                <div className="py-10 text-center text-slate-400 text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-200 p-6 space-y-1">
+                  <Globe className="w-8 h-8 mx-auto text-amber-500 opacity-50 mb-2" />
+                  <p className="font-bold text-slate-700">Awaiting Search Query</p>
+                  <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                    When an online candidate arrives at the desk, ask for their registered Mobile Number, National ID/Aadhaar, or Temporary Pre-Registration ID.
+                  </p>
+                </div>
+              )}
+
+              {deskSearchResults.map((cand) => {
+                const isRemotePending =
+                  cand.source_type === 'ONLINE_REMOTE' && cand.registration_status === 'DRAFT_PENDING_FEE';
+                const hasReceipt = cand.fee_receipts && cand.fee_receipts.length > 0;
+                const prescribedFee = cand.staff_categories?.application_fee ?? 200;
+
+                return (
+                  <div
+                    key={cand.id}
+                    className="p-4 bg-white border-2 border-slate-200 hover:border-amber-400 rounded-2xl shadow-sm space-y-3 transition"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h5 className="font-bold text-slate-900 text-sm">{cand.candidate_name}</h5>
+                          {isRemotePending ? (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-extrabold uppercase flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-amber-600" /> Online Pre-Reg (Pending Fee)
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-extrabold uppercase flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Paid &amp; Active
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-0.5 space-x-2 font-mono">
+                          {cand.temp_id && (
+                            <span className="font-bold text-sky-800 bg-sky-50 px-1.5 py-0.5 rounded">
+                              ID: {cand.temp_id}
+                            </span>
+                          )}
+                          <span>App: {cand.application_no}</span>
+                          <span>•</span>
+                          <span>Mobile: +91 {cand.contact_no}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {isRemotePending ? (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenSettleModal(cand)}
+                            className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-xl text-xs font-black shadow-md transition flex items-center gap-1.5"
+                          >
+                            <IndianRupee className="w-4 h-4" /> Process Fee &amp; Convert
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (cand.fee_receipts?.[0]) {
+                                handlePrintExistingReceipt(cand);
+                              } else {
+                                setSelectedApp(cand);
+                              }
+                            }}
+                            className="px-3.5 py-2 border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1"
+                          >
+                            <Printer className="w-3.5 h-3.5 text-slate-500" /> View Receipt
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-100 text-[11px] text-slate-600">
+                      <div>
+                        <span className="text-slate-400 block">Designation:</span>
+                        <strong className="text-slate-800">{cand.posts?.title || 'Applied Post'}</strong>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block">Stream &amp; Course:</span>
+                        <strong className="text-slate-800">{cand.program_stream}</strong>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block">Category &amp; Fee:</span>
+                        <strong className="text-emerald-700 font-mono">
+                          {cand.staff_categories?.name || 'General'} (₹{prescribedFee})
+                        </strong>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block">Registered On:</span>
+                        <strong className="text-slate-800">
+                          {new Date(cand.created_at).toLocaleDateString('en-IN', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────────────────
+          2. PROCESS FEE & CONVERT MODAL (FRONT DESK SETTLEMENT ACTION)
+          ───────────────────────────────────────────────────────────────────────────── */}
+      {settleModalApp && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-xl w-full p-6 sm:p-8 space-y-6">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center shadow-inner">
+                  <IndianRupee className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base sm:text-lg text-slate-900">
+                    Process Fee &amp; Convert Pre-Registration
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Collect physical desk fee, verify credentials, and convert to active verified candidate application.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSettleModalApp(null)}
+                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Candidate Summary Box */}
+            <div className="p-4 bg-gradient-to-br from-amber-50 to-orange-50/40 border border-amber-200 rounded-2xl space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-slate-500">Candidate:</span>{' '}
+                  <strong className="text-slate-900 text-sm">{settleModalApp.candidate_name}</strong>
+                </div>
+                <span className="px-2 py-0.5 bg-amber-200/80 text-amber-900 font-bold rounded text-[10px]">
+                  {settleModalApp.temp_id || 'PRE-REG'}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600">
+                <div>
+                  <span className="text-slate-400 block">Mobile:</span>
+                  <strong className="font-mono text-slate-800">+91 {settleModalApp.contact_no}</strong>
+                </div>
+                <div>
+                  <span className="text-slate-400 block">Post Applied:</span>
+                  <strong className="text-slate-800">{settleModalApp.posts?.title || 'Applied Post'}</strong>
+                </div>
+                <div>
+                  <span className="text-slate-400 block">Discipline Stream:</span>
+                  <strong className="text-slate-800">{settleModalApp.program_stream}</strong>
+                </div>
+                <div>
+                  <span className="text-slate-400 block">Prescribed Sanstha Fee:</span>
+                  <strong className="text-emerald-700 font-mono text-xs">
+                    ₹{settleModalApp.staff_categories?.application_fee ?? 200}
+                  </strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleConfirmSettleFee} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Fee Amount Collected (₹) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    required
+                    value={settleFeeAmount}
+                    onChange={(e) => setSettleFeeAmount(parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-0.5 block font-mono">
+                    ({numberToWordsINR(settleFeeAmount)})
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Payment Mode <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={settlePaymentMode}
+                    onChange={(e) => setSettlePaymentMode(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500"
+                  >
+                    {paymentModes.length > 0 ? (
+                      paymentModes.map((pm) => (
+                        <option key={pm.id} value={pm.name}>
+                          {pm.name}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="Cash">Cash (रोख)</option>
+                        <option value="UPI / QR">UPI / QR (PhonePe / GPay)</option>
+                        <option value="Cheque">Cheque (धनादेश)</option>
+                        <option value="Demand Draft">Demand Draft (डीडी)</option>
+                        <option value="NEFT / IMPS">NEFT / Net Banking</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Payment / UTR Reference No.
+                  </label>
+                  <input
+                    type="text"
+                    value={settlePaymentRefNo}
+                    onChange={(e) => setSettlePaymentRefNo(e.target.value)}
+                    placeholder="e.g. UPI Ref / Cheque No / Cash"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Official Fee Receipt No. <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={settleReceiptNo}
+                    onChange={(e) => setSettleReceiptNo(e.target.value)}
+                    placeholder="e.g. REC/2026-27/1001"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              {/* Physical Verification Checklist */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <span className="text-[11px] font-black uppercase text-slate-600 block">
+                  Mandatory Desk Verification Checklist:
+                </span>
+                <label className="flex items-start gap-2 cursor-pointer text-xs text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={settleVerifyId}
+                    onChange={(e) => setSettleVerifyId(e.target.checked)}
+                    className="mt-0.5 rounded text-emerald-600"
+                  />
+                  <span>Original Photo Identification (Aadhaar / Voter ID / PAN) inspected physically at desk</span>
+                </label>
+                <label className="flex items-start gap-2 cursor-pointer text-xs text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={settleVerifyDocs}
+                    onChange={(e) => setSettleVerifyDocs(e.target.checked)}
+                    className="mt-0.5 rounded text-emerald-600"
+                  />
+                  <span>Original Educational Marksheets &amp; Degree certificates verified by desk officer</span>
+                </label>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Verification Remarks / Notes
+                </label>
+                <input
+                  type="text"
+                  value={settleRemarks}
+                  onChange={(e) => setSettleRemarks(e.target.value)}
+                  placeholder="Desk inspection notes..."
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:bg-white"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setSettleModalApp(null)}
+                  className="px-4 py-2.5 border rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSettlingFee || !settleVerifyId || !settleVerifyDocs}
+                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-xl text-xs font-black shadow-lg transition flex items-center gap-2 disabled:opacity-50"
+                >
+                  {isSettlingFee ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Processing &amp; Converting...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                      Collect Fee &amp; Convert Application
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Success Toast for Settlement */}
+      {settleSuccessToast && (
+        <div className="fixed bottom-6 right-6 z-[70] bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-3 animate-in slide-in-from-bottom duration-200 max-w-md">
+          <div className="w-9 h-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+          <div className="text-xs space-y-0.5">
+            <span className="font-black text-emerald-400 block">Candidate Converted Successfully</span>
+            <span className="text-slate-200 block">{settleSuccessToast}</span>
+          </div>
+          <button
+            onClick={() => setSettleSuccessToast(null)}
             className="text-slate-400 hover:text-white p-1 rounded-lg ml-auto"
           >
             <X className="w-4 h-4" />

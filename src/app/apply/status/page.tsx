@@ -223,6 +223,9 @@ type AppData = {
   management_approved_at?: string;
   management_approval_remarks?: string;
   cancellation_reason?: string;
+  temp_id?: string;
+  source_type?: string;
+  registration_status?: string;
   posts?: { title: string } | null;
   custom_post_title?: string;
   staff_categories?: { name: string } | null;
@@ -262,12 +265,12 @@ export default function ApplicationStatusPage() {
     setMobileError(null);
 
     try {
-      // Fetch only non-PII fields first; full PII revealed only after mobile verification
-      const { data, error: dbErr } = await supabase
+      const queryBuilder = supabase
         .from('applications')
         .select(`
           id, application_no, candidate_name, contact_no, email_id, address, dob,
           status, submission_channel, created_at, updated_at,
+          temp_id, source_type, registration_status,
           verified_at, verified_by, verification_remarks,
           forwarded_at, forwarded_to_head_name, central_hr_remarks,
           interview_conducted_date, interview_venue,
@@ -277,9 +280,33 @@ export default function ApplicationStatusPage() {
           staff_categories(name),
           institutes:preferred_institute_id(official_name),
           fee_receipts(receipt_no, amount, issued_at)
-        `)
-        .eq('application_no', clean)
-        .maybeSingle();
+        `);
+
+      let res = await (clean.includes('TMP') || clean.includes('TEMP')
+        ? queryBuilder.or(`temp_id.ilike.%${clean}%,application_no.ilike.%${clean}%`).maybeSingle()
+        : queryBuilder.or(`application_no.eq.${clean},temp_id.ilike.%${clean}%`).maybeSingle());
+
+      if (res.error && res.error.message.includes('temp_id')) {
+        res = await supabase
+          .from('applications')
+          .select(`
+            id, application_no, candidate_name, contact_no, email_id, address, dob,
+            status, submission_channel, created_at, updated_at,
+            verified_at, verified_by, verification_remarks,
+            forwarded_at, forwarded_to_head_name, central_hr_remarks,
+            interview_conducted_date, interview_venue,
+            institute_recommendation, management_approved_at, management_approval_remarks,
+            cancellation_reason, custom_post_title,
+            posts(title),
+            staff_categories(name),
+            institutes:preferred_institute_id(official_name),
+            fee_receipts(receipt_no, amount, issued_at)
+          `)
+          .eq('application_no', clean)
+          .maybeSingle();
+      }
+
+      const { data, error: dbErr } = res;
 
       if (dbErr) throw dbErr;
       if (!data) {
@@ -372,8 +399,8 @@ export default function ApplicationStatusPage() {
               </h1>
               <p className="text-[11px] text-slate-500 mt-0.5">
                 {lang === 'mr'
-                  ? 'आपला अर्ज क्रमांक प्रविष्ट करा आणि अर्जाची सध्याची स्थिती पाहा.'
-                  : 'Enter your Application Number to check the current status of your application.'}
+                  ? 'आपला अर्ज क्रमांक (उदा. 2026-OCT-00001) किंवा तात्पुरता आयडी (उदा. TMP-2026-00001) प्रविष्ट करा.'
+                  : 'Enter your Application Number (e.g. 2026-OCT-00001) or Temporary ID (e.g. TMP-2026-00001) to check status.'}
               </p>
             </div>
           </div>
@@ -381,7 +408,7 @@ export default function ApplicationStatusPage() {
           <div className="flex gap-2">
             <input
               type="text"
-              placeholder={lang === 'mr' ? 'उदा. 2026-OCT-00001' : 'e.g. 2026-OCT-00001'}
+              placeholder={lang === 'mr' ? 'उदा. 2026-OCT-00001 किंवा TMP-2026-00001' : 'e.g. 2026-OCT-00001 or TMP-2026-00001'}
               value={appNoInput}
               onChange={(e) => { setAppNoInput(e.target.value.toUpperCase()); setError(null); }}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -537,6 +564,23 @@ export default function ApplicationStatusPage() {
                   {lang === 'mr'
                     ? 'अर्जाची प्रक्रिया थांबली आहे. अधिक माहितीसाठी HR Office शी संपर्क साधा.'
                     : 'Application processing has stopped. Please contact HR Office for further information.'}
+                </div>
+              )}
+
+              {/* Remote Pre-Registration Pending Desk Fee Callout */}
+              {app.registration_status === 'DRAFT_PENDING_FEE' && (
+                <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-2xl flex items-start gap-3">
+                  <Clock className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+                  <div className="text-xs text-amber-950 space-y-1">
+                    <strong className="font-bold">
+                      {lang === 'mr' ? 'ऑनलाइन पूर्व-नोंदणी: फ्रंट डेस्क शुल्क भरणे बाकी' : 'Online Pre-Registration: Front Desk Settlement Pending'}
+                    </strong>
+                    <p className="text-amber-900 leading-relaxed text-[11px]">
+                      {lang === 'mr'
+                        ? `आपली पूर्व-नोंदणी (तात्पुरता आयडी: ${app.temp_id || app.application_no}) प्रणालीत नोंदवली गेली आहे. कृपया मूळ प्रमाणपत्रांसह श्री बाळासाहेब माने शिक्षण प्रसारक मंडळ, आंबाप येथील Central HR Front Desk ला भेट द्या. तेथे विहित शुल्क भरून अधिकृत पावती घ्या व अर्ज सक्रिय करा.`
+                        : `Your online pre-registration (Temporary ID: ${app.temp_id || app.application_no}) is recorded. Please visit the Central HR Front Desk at Ambap Campus with your original credentials. Front desk staff will collect the application fee, issue your official receipt, and activate your application for interview scheduling.`}
+                    </p>
+                  </div>
                 </div>
               )}
             </div>

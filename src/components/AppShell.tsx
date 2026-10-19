@@ -48,6 +48,7 @@ import {
   ClipboardCheck,
   Star,
   Scale,
+  Globe,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────
@@ -106,6 +107,14 @@ const SIDEBAR_MODULES: SidebarModule[] = [
         icon: FileText,
         badge: 'Apply',
         badgeColor: 'bg-teal-700/80 text-teal-200',
+        exact: true,
+      },
+      {
+        title: 'Remote Pre-Registration',
+        href: '/apply/online',
+        icon: Globe,
+        badge: 'Remote',
+        badgeColor: 'bg-amber-700/80 text-amber-200',
         exact: true,
       },
       {

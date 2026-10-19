@@ -252,7 +252,13 @@ export type Application = {
     | 'institute_reviewed'
     | 'rejected'
     | 'cancelled';
-  submission_channel: 'qr_self' | 'receptionist_entry';
+  submission_channel: 'qr_self' | 'receptionist_entry' | 'online_remote' | 'frontdesk_assisted';
+  source_type?: 'WALKIN_DESK' | 'ONLINE_REMOTE';
+  registration_status?: 'DRAFT_PENDING_FEE' | 'COMPLETED_PAID';
+  temp_id?: string | null;
+  fee_receipt_no?: string | null;
+  collected_by_user_id?: string | null;
+  collected_at?: string | null;
   verified_by?: string;
   verified_at?: string;
   verification_remarks?: string;

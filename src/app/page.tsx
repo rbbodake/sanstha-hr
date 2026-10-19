@@ -27,6 +27,12 @@ import {
   CheckCircle2,
   Clock,
   ArrowUpRight,
+  Globe,
+  Search,
+  Copy,
+  Check,
+  ExternalLink,
+  AlertCircle,
   UserCog
 } from 'lucide-react';
 import { TrustLetterhead } from '@/components/TrustLetterhead';
@@ -58,8 +64,12 @@ export default function HomePage() {
     feePaidApplications: 0,
     totalInstitutes: 0,
     totalPosts: 0,
+    remotePreRegistrations: 0,
   });
   const [loadingStats, setLoadingStats] = useState(true);
+  const [remoteCandidates, setRemoteCandidates] = useState<any[]>([]);
+  const [remoteSearch, setRemoteSearch] = useState('');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Authentication & Role Routing Guard
   useEffect(() => {
@@ -103,12 +113,47 @@ export default function HomePage() {
         const { count: instCount } = await supabase.from('institutes').select('*', { count: 'exact', head: true }).eq('is_active', true);
         const { count: postCount } = await supabase.from('posts').select('*', { count: 'exact', head: true }).eq('is_active', true);
 
+        // Fetch Remote Candidate Pre-Registrations (Visible exclusively to Central HR)
+        let remotePendingCount = 0;
+        try {
+          const { data: remoteData, count: rCount } = await supabase
+            .from('applications')
+            .select(`
+              id,
+              application_no,
+              temp_id,
+              candidate_name,
+              contact_no,
+              email_id,
+              program_stream,
+              course_name,
+              specialization,
+              source_type,
+              registration_status,
+              created_at,
+              posts (title),
+              staff_categories (name, application_fee),
+              institutes:preferred_institute_id (official_name)
+            `, { count: 'exact' })
+            .eq('source_type', 'ONLINE_REMOTE')
+            .eq('registration_status', 'DRAFT_PENDING_FEE')
+            .order('created_at', { ascending: false });
+
+          if (remoteData) {
+            setRemoteCandidates(remoteData);
+            remotePendingCount = rCount || remoteData.length;
+          }
+        } catch (rErr) {
+          console.warn('Remote candidate query notice:', rErr);
+        }
+
         setStats({
           totalApplications: appCount || 0,
           verifiedApplications: verifiedCount || 0,
           feePaidApplications: feeCount || 0,
           totalInstitutes: instCount || 0,
           totalPosts: postCount || 0,
+          remotePreRegistrations: remotePendingCount,
         });
       } catch (err) {
         console.warn('Stats fetch error:', err);
@@ -179,7 +224,7 @@ export default function HomePage() {
       </div>
 
       {/* KPI Stats Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-500">Total Candidates</span>
@@ -232,7 +277,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between col-span-2 sm:col-span-1">
+        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-500">Job Positions</span>
             <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center">
@@ -244,6 +289,174 @@ export default function HomePage() {
             <div className="text-[10px] text-slate-400 font-semibold mt-0.5">Designation roles</div>
           </div>
         </div>
+
+        {/* 6th KPI Card: Remote Pre-Registrations (Pending Desk Fee) */}
+        <div className="bg-gradient-to-br from-amber-50 to-orange-50/40 p-5 rounded-3xl border-2 border-amber-300 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-amber-800">Remote Pre-Reg</span>
+            <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shadow-inner">
+              <Globe className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="text-2xl font-black text-amber-900">{stats.remotePreRegistrations}</div>
+            <div className="text-[10px] text-amber-700 font-semibold mt-0.5 flex items-center gap-1">
+              <Clock className="w-3 h-3" /> Pending Desk Fee
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ─────────────────────────────────────────────────────────────────────────────
+          CENTRAL HR EXCLUSIVE MODULE: REMOTE CANDIDATE ONLINE PRE-REGISTRATIONS
+          ───────────────────────────────────────────────────────────────────────────── */}
+      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center">
+              <Globe className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-black text-slate-900">
+                  Remote Online Pre-Registrations
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-amber-900 text-[10px] font-extrabold uppercase">
+                  Central HR Only • {remoteCandidates.length} Pending
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">
+                Candidates registered online prior to walk-in visit. Awaiting physical document verification and fee settlement at Front Desk.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search Temp ID, Name, Mobile..."
+                value={remoteSearch}
+                onChange={(e) => setRemoteSearch(e.target.value)}
+                className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:ring-2 focus:ring-sky-500 w-52 sm:w-64"
+              />
+            </div>
+            <Link
+              href="/apply/online"
+              target="_blank"
+              className="px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-800 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border border-sky-200"
+            >
+              <ExternalLink className="w-3.5 h-3.5" /> Public Link
+            </Link>
+          </div>
+        </div>
+
+        {remoteCandidates.length === 0 ? (
+          <div className="py-12 text-center text-slate-400 text-xs space-y-1">
+            <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-500 mb-2 opacity-60" />
+            <p className="font-bold text-slate-600">No Pending Remote Pre-Registrations</p>
+            <p className="text-[11px]">All remote candidate entries have either completed desk fee settlement or none are currently queued.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
+                  <th className="py-3 px-4">Temporary ID</th>
+                  <th className="py-3 px-4">Candidate Details</th>
+                  <th className="py-3 px-4">Applied Designation & Stream</th>
+                  <th className="py-3 px-4">Pre-Reg Date</th>
+                  <th className="py-3 px-4 text-center">Status</th>
+                  <th className="py-3 px-4 text-right">Desk Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {remoteCandidates
+                  .filter((c) => {
+                    if (!remoteSearch.trim()) return true;
+                    const q = remoteSearch.toLowerCase();
+                    return (
+                      (c.temp_id && c.temp_id.toLowerCase().includes(q)) ||
+                      (c.candidate_name && c.candidate_name.toLowerCase().includes(q)) ||
+                      (c.contact_no && c.contact_no.includes(q)) ||
+                      (c.application_no && c.application_no.toLowerCase().includes(q))
+                    );
+                  })
+                  .map((cand) => (
+                    <tr key={cand.id} className="hover:bg-amber-50/40 transition">
+                      <td className="py-3 px-4 font-mono font-bold text-sky-800">
+                        <div className="flex items-center gap-1.5">
+                          <span>{cand.temp_id || 'TEMP-PENDING'}</span>
+                          {cand.temp_id && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(cand.temp_id);
+                                setCopiedId(cand.temp_id);
+                                setTimeout(() => setCopiedId(null), 2000);
+                              }}
+                              className="text-slate-400 hover:text-sky-600 transition"
+                              title="Copy Temporary ID"
+                            >
+                              {copiedId === cand.temp_id ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-normal block font-sans">
+                          {cand.application_no}
+                        </span>
+                      </td>
+
+                      <td className="py-3 px-4">
+                        <div className="font-bold text-slate-900">{cand.candidate_name}</div>
+                        <div className="text-[11px] text-slate-500 font-mono">
+                          +91 {cand.contact_no} {cand.email_id ? `• ${cand.email_id}` : ''}
+                        </div>
+                      </td>
+
+                      <td className="py-3 px-4">
+                        <div className="font-bold text-slate-800">
+                          {cand.posts?.title || 'Applied Post'}
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          {cand.program_stream} {cand.course_name ? `• ${cand.course_name}` : ''}
+                        </div>
+                      </td>
+
+                      <td className="py-3 px-4 text-slate-600 text-[11px]">
+                        {new Date(cand.created_at).toLocaleDateString('en-IN', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric'
+                        })}
+                      </td>
+
+                      <td className="py-3 px-4 text-center">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
+                          <Clock className="w-3 h-3 text-amber-600" />
+                          Pending Desk Fee (₹{cand.staff_categories?.application_fee ?? 200})
+                        </span>
+                      </td>
+
+                      <td className="py-3 px-4 text-right">
+                        <Link
+                          href={`/receptionist?lookup=${encodeURIComponent(cand.temp_id || cand.contact_no)}`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-sky-700 hover:bg-sky-800 text-white rounded-xl text-xs font-bold transition shadow-sm"
+                        >
+                          <UserCheck className="w-3.5 h-3.5" /> Settle Fee
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Main Action Workspaces */}
@@ -441,6 +654,23 @@ export default function HomePage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Link
+            href="/apply/online"
+            target="_blank"
+            className="p-4 rounded-2xl border-2 border-amber-300 hover:border-amber-500 bg-amber-50/40 hover:bg-amber-100/50 transition flex items-start gap-3 group shadow-sm"
+          >
+            <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-600 group-hover:text-white transition">
+              <Globe className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <h4 className="text-xs font-bold text-slate-900">Remote Pre-Registration</h4>
+                <span className="px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 text-[9px] font-black uppercase">Public</span>
+              </div>
+              <p className="text-[11px] text-slate-600 mt-0.5">Public link for remote candidates to pre-register before visiting desk</p>
+            </div>
+          </Link>
+
           <Link
             href="/apply"
             className="p-4 rounded-2xl border border-slate-200 hover:border-sky-500 hover:bg-sky-50/40 transition flex items-start gap-3 group"
