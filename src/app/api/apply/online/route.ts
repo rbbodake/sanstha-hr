@@ -99,6 +99,7 @@ export async function POST(request: NextRequest) {
     let resumeFile: File | null = null;
     let aadhaarFile: File | null = null;
     let panFile: File | null = null;
+    const eduFiles: Record<number, File> = {};
 
     // Qualifications & Experiences
     let eduRows: Array<{
@@ -206,6 +207,13 @@ export async function POST(request: NextRequest) {
       const panDoc = formData.get('pan_file');
       if (panDoc && typeof panDoc === 'object' && 'name' in panDoc && (panDoc as File).size > 0) {
         panFile = panDoc as File;
+      }
+
+      for (let i = 0; i < 25; i++) {
+        const ef = formData.get(`edu_file_${i}`);
+        if (ef && typeof ef === 'object' && 'name' in ef && (ef as File).size > 0) {
+          eduFiles[i] = ef as File;
+        }
       }
 
       // Check if education list was submitted as JSON
@@ -585,7 +593,8 @@ export async function POST(request: NextRequest) {
 
     // ─── INSERT EDUCATIONAL DETAILS ──────────────────────────────────────────
     if (eduRows && eduRows.length > 0) {
-      for (const edu of eduRows) {
+      for (let idx = 0; idx < eduRows.length; idx++) {
+        const edu = eduRows[idx];
         const hasContent =
           Boolean(edu.percentage) ||
           Boolean(edu.cgpa) ||
@@ -596,6 +605,11 @@ export async function POST(request: NextRequest) {
 
         if (hasContent) {
           try {
+            let docUrl = edu.doc_url || null;
+            if (eduFiles[idx]) {
+              docUrl = await uploadFileBuffer('candidate-documents', eduFiles[idx], `${generatedTempId}_edu_${idx}`);
+            }
+
             const markingSys = (edu.marking_system || 'percentage').toLowerCase();
             const pct = markingSys === 'percentage' && edu.percentage
               ? parseFloat(edu.percentage)
@@ -613,7 +627,7 @@ export async function POST(request: NextRequest) {
               cgpa: markingSys === 'cgpa' && edu.cgpa ? parseFloat(edu.cgpa) : null,
               cgpa_scale: markingSys === 'cgpa' && edu.cgpa_scale ? parseFloat(edu.cgpa_scale) : 10,
               score: edu.score?.trim() || null,
-              doc_url: edu.doc_url || null,
+              doc_url: docUrl,
             };
 
             const { error: eduErr } = await supabase.from('application_education').insert(eduPayload);
@@ -684,9 +698,8 @@ export async function POST(request: NextRequest) {
       designation: resolvedTitle || designation,
       program_stream: stream,
       contact_no: cleanMobile,
-      fee: prescribedFee,
-      status: 'DRAFT_PENDING_FEE',
-      message: 'Online pre-registration recorded successfully. Physical fee settlement (₹50) pending at Front Desk.',
+      status: 'SUBMITTED',
+      message: 'Online pre-registration recorded successfully. Physical verification pending at Central HR Front Desk.',
       redirect_url: `/apply/online?success=1&temp_id=${generatedTempId}`,
     }, { status: 201 });
   } catch (err: any) {

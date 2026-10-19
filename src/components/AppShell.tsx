@@ -786,7 +786,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </>
             )}
           </div>
-          ) : (
+          ) : !pathname.startsWith('/apply') ? (
             <Link
               href="/login"
               className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-sm"
@@ -794,7 +794,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Lock className="w-3.5 h-3.5 text-sky-400" />
               <span>Staff Login</span>
             </Link>
-          )}
+          ) : null}
        </div>
       </header>
 

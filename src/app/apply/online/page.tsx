@@ -381,6 +381,30 @@ function OnlinePreRegistrationContent() {
     }
   };
 
+  // Education row helpers
+  const addEducationRow = () => {
+    setEducationList([
+      ...educationList,
+      {
+        level: 'Other / अतिरिक्त पात्रता',
+        degree_name: '',
+        board_university: '',
+        passing_year: '',
+        status_remark: '',
+        percentage: '',
+        marking_system: 'percentage' as 'percentage' | 'cgpa',
+        cgpa: '',
+        cgpa_scale: '10',
+        file: null as File | null,
+      },
+    ]);
+  };
+
+  const removeEducationRow = (idx: number) => {
+    if (educationList.length <= 8) return; // Preserve base 8 standard tiers
+    setEducationList(educationList.filter((_, i) => i !== idx));
+  };
+
   // Experience row helpers
   const addExperienceRow = () => {
     setExperienceList([...experienceList, { organization_name: '', designation: '', years_experience: '', previous_salary: '' }]);
@@ -393,7 +417,6 @@ function OnlinePreRegistrationContent() {
 
   // Selected Post helper
   const selectedPost = posts.find((p) => p.id === selectedPostId);
-  const applicationFee = 50; // Remote pre-registration fee collected at front desk
 
   // Form Submit Handler
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -483,6 +506,12 @@ function OnlinePreRegistrationContent() {
       formData.append('education_list_json', JSON.stringify(serializableEdu));
       formData.append('qualification_summary', qualificationSummary);
 
+      educationList.forEach((edu, idx) => {
+        if (edu.file) {
+          formData.append(`edu_file_${idx}`, edu.file);
+        }
+      });
+
       // Experience List
       formData.append('is_fresher', isFresher ? 'Yes' : 'No');
       formData.append('total_teaching_exp_years', teachingExpYears);
@@ -549,15 +578,15 @@ function OnlinePreRegistrationContent() {
             <div className="w-16 h-16 bg-emerald-100 text-emerald-700 rounded-3xl flex items-center justify-center mx-auto shadow-inner border border-emerald-200">
               <CheckCircle2 className="w-9 h-9" />
             </div>
-            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold">
-              <Clock className="w-3.5 h-3.5 text-amber-600" />
-              Pre-Registration Recorded • Pending Front Desk Fee Settlement
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-sky-50 border border-sky-300 text-sky-900 text-xs font-bold">
+              <CheckCircle2 className="w-3.5 h-3.5 text-sky-600" />
+              Pre-Registration Recorded • Ready for Document Verification
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
               Online Pre-Registration Successful!
             </h1>
             <p className="text-xs sm:text-sm text-slate-600 max-w-lg mx-auto">
-              Your details have been saved as <strong className="text-slate-800">Draft (Pending Fee)</strong>. No online payment was required.
+              Your pre-registration has been successfully recorded in the Central HR system. Please present this reference during physical reporting.
             </p>
           </div>
 
@@ -607,8 +636,8 @@ function OnlinePreRegistrationContent() {
                 <span className="font-bold font-mono text-slate-900">{submittedCandidate.contact_no}</span>
               </div>
               <div>
-                <span className="text-slate-500 font-medium">Application Fee:</span>{' '}
-                <span className="font-bold text-emerald-700">₹{submittedCandidate.prescribed_fee} (Payable upon physical arrival)</span>
+                <span className="text-slate-500 font-medium">Reporting Office:</span>{' '}
+                <span className="font-bold text-sky-800">Central HR Front Desk, Ambap Campus</span>
               </div>
             </div>
             <div className="flex flex-col items-center justify-center p-3 bg-white border border-slate-200 rounded-xl shadow-sm">
@@ -625,7 +654,7 @@ function OnlinePreRegistrationContent() {
           <div className="space-y-3">
             <h3 className="font-extrabold text-sm uppercase tracking-wider text-slate-800 flex items-center gap-2">
               <MapPin className="w-4 h-4 text-sky-600" />
-              Next Steps for Front Desk Walk-In Settlement:
+              Next Steps for Physical Reporting & Verification:
             </h3>
             <ol className="space-y-3 text-xs text-slate-700">
               <li className="flex items-start gap-3 p-3 bg-white border border-slate-200 rounded-xl">
@@ -655,9 +684,9 @@ function OnlinePreRegistrationContent() {
                   3
                 </span>
                 <div>
-                  <strong className="text-slate-900">Desk Staff Fee Collection (₹{submittedCandidate.prescribed_fee}) & Verification:</strong>
+                  <strong className="text-slate-900">Front Desk Verification & Physical Reporting:</strong>
                   <p className="text-slate-600 text-[11px] mt-0.5">
-                    Front Desk staff will look up your record using your Temporary ID or Mobile Number, accept the application fee of ₹{submittedCandidate.prescribed_fee} (Cash, UPI, or DD), verify your credentials, and issue your official stamped receipt.
+                    Present your Temporary ID or Mobile Number at the Central HR Front Desk. The Front Desk officer will verify your credentials, complete registration for your post category, and issue your verified acknowledgement slip.
                   </p>
                 </div>
               </li>
@@ -741,20 +770,6 @@ function OnlinePreRegistrationContent() {
           />
         </div>
 
-        {/* PROMINENT APPLICATION FEE NOTICE BANNER */}
-        <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-2xl flex items-start gap-3 shadow-sm">
-          <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
-          <div className="text-xs text-amber-950 space-y-1">
-            <strong className="font-bold">
-              {lang === 'mr' ? 'ऑनलाइन शुल्क भरण्याची आवश्यकता नाही:' : 'Online Payment is NOT Required:'}
-            </strong>
-            <p className="text-amber-900 leading-relaxed">
-              {lang === 'mr'
-                ? 'आपला अर्ज ड्राफ्ट (शुल्क बाकी) म्हणून जतन केला जाईल. विहित अर्ज शुल्क (₹५०) प्रत्यक्ष मध्यवर्ती HR फ्रंट डेस्कवर आल्यावर स्वीकारले जाईल.'
-                : 'Your submission will be saved as Draft (Pending Fee). The prescribed application fee (₹50) will be collected upon physical arrival at the Central HR Front Desk.'}
-            </p>
-          </div>
-        </div>
 
         {submitError && (
           <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
@@ -932,9 +947,6 @@ function OnlinePreRegistrationContent() {
                     </optgroup>
                   )}
                 </select>
-                <span className="text-[10px] text-slate-500 font-medium mt-1 block">
-                  Application Fee: <strong className="text-emerald-700 font-mono">₹{applicationFee}</strong> (Settled in person at Front Desk)
-                </span>
               </div>
             </div>
 
@@ -1585,16 +1597,272 @@ function OnlinePreRegistrationContent() {
               </div>
             </div>
 
-            {/* Desktop Table View */}
-            <div className="hidden md:block overflow-x-auto rounded-2xl border border-slate-200">
-              <table className="w-full text-left text-xs border-collapse">
+            {/* A. MOBILE VIEW: Touch-friendly cards for each qualification tier */}
+            <div className="block md:hidden space-y-3.5">
+              {educationList.map((edu, idx) => {
+                const isBelow10th = edu.level.includes('Below 10th');
+                const isPhd = edu.level.includes('Ph.D');
+                const isNetSet = edu.level.includes('NET');
+                const isUgPg = edu.level.includes('Graduation (UG)') || edu.level.includes('Post Graduation (PG)');
+                const isCustomRow = idx >= 8;
+
+                return (
+                  <div key={idx} className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5 relative">
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
+                      <span className="font-bold text-xs text-slate-900">{edu.level}</span>
+                      <div className="flex items-center gap-1.5">
+                        {edu.percentage && !isPhd && !isNetSet && (
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                            {edu.percentage}%
+                          </span>
+                        )}
+                        {(isPhd || isNetSet) && edu.status_remark && (
+                          <span className="text-[10px] font-bold text-sky-800 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-200">
+                            {edu.status_remark}
+                          </span>
+                        )}
+                        {isCustomRow && (
+                          <button
+                            type="button"
+                            onClick={() => removeEducationRow(idx)}
+                            className="p-1 text-rose-600 hover:bg-rose-100 rounded-lg transition"
+                            title="Remove qualification"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Degree / Branch / Subject */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div className="col-span-2">
+                        <label className="block text-[10px] font-bold uppercase text-slate-600 mb-0.5">
+                          {isBelow10th
+                            ? (lang === 'mr' ? 'इयत्ता / वर्ग (उदा. ७वी / ८वी पास)' : 'Class / Standard (e.g. 7th / 8th Pass)')
+                            : isPhd
+                            ? (lang === 'mr' ? 'विषय / संशोधन शाखा' : 'Ph.D. Topic / Discipline')
+                            : isNetSet
+                            ? (lang === 'mr' ? 'परीक्षेचे नाव (उदा. NET / SET / GATE)' : 'Exam Name (e.g. NET / SET / GATE)')
+                            : (lang === 'mr' ? 'पदवी / शाखा / विषय' : 'Degree / Branch / Subject')}
+                        </label>
+                        <input
+                          type="text"
+                          placeholder={
+                            isBelow10th
+                              ? (lang === 'mr' ? 'उदा. ४थी / ७वी / ८वी / ९वी' : 'e.g. 4th / 7th / 8th / 9th')
+                              : isPhd
+                              ? (lang === 'mr' ? 'उदा. मेकॅनिकल इंजिनिअरिंग' : 'e.g. Mechanical Engineering')
+                              : isNetSet
+                              ? (lang === 'mr' ? 'उदा. UGC-NET / MH-SET / GATE' : 'e.g. UGC-NET / MH-SET / GATE')
+                              : (lang === 'mr' ? 'उदा. SSC / HSC / B.E. / M.Tech' : 'e.g. SSC / HSC / B.E. / M.Tech')
+                          }
+                          value={edu.degree_name}
+                          onChange={(e) => {
+                            const updated = [...educationList];
+                            updated[idx].degree_name = e.target.value;
+                            setEducationList(updated);
+                          }}
+                          onBlur={(e) => {
+                            const updated = [...educationList];
+                            updated[idx].degree_name = toSmartTitleCase(e.target.value);
+                            setEducationList(updated);
+                          }}
+                          className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:ring-1 focus:ring-sky-500 focus:outline-none"
+                        />
+                      </div>
+
+                      {isPhd ? (
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-slate-600 mb-0.5">
+                            {lang === 'mr' ? 'पीएच.डी. स्थिती' : 'Ph.D. Status'}
+                          </label>
+                          <select
+                            value={edu.status_remark || 'Awarded'}
+                            onChange={(e) => {
+                              const updated = [...educationList];
+                              updated[idx].status_remark = e.target.value;
+                              setEducationList(updated);
+                            }}
+                            className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 focus:ring-1 focus:ring-sky-500 focus:outline-none"
+                          >
+                            <option value="Awarded">{lang === 'mr' ? 'Awarded (प्रदान)' : 'Awarded'}</option>
+                            <option value="Scholar / Pursuing">{lang === 'mr' ? 'Pursuing (संशोधक / चालू)' : 'Scholar / Pursuing'}</option>
+                          </select>
+                        </div>
+                      ) : isNetSet ? (
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-slate-600 mb-0.5">
+                            {lang === 'mr' ? 'स्थिती' : 'Status'}
+                          </label>
+                          <select
+                            value={edu.status_remark || 'Qualified'}
+                            onChange={(e) => {
+                              const updated = [...educationList];
+                              updated[idx].status_remark = e.target.value;
+                              setEducationList(updated);
+                            }}
+                            className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 focus:ring-1 focus:ring-sky-500 focus:outline-none"
+                          >
+                            <option value="Qualified">{lang === 'mr' ? 'Qualified (उत्तीर्ण)' : 'Qualified'}</option>
+                            <option value="Not Qualified / Appeared">{lang === 'mr' ? 'Not Qualified (अनुत्तीर्ण / प्रविष्ट)' : 'Not Qualified / Appeared'}</option>
+                          </select>
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-slate-600 mb-0.5">
+                            {lang === 'mr' ? 'गुण / %' : '% / CGPA'}
+                          </label>
+                          {isUgPg && (
+                            <select
+                              aria-label="Marking system"
+                              value={edu.marking_system}
+                              onChange={(e) => {
+                                const updated = [...educationList];
+                                updated[idx].marking_system = e.target.value as 'percentage' | 'cgpa';
+                                setEducationList(updated);
+                              }}
+                              className="w-full mb-1.5 px-2 py-1 border border-slate-300 rounded-lg text-[11px] bg-white font-semibold"
+                            >
+                              <option value="percentage">Percentage (%)</option>
+                              <option value="cgpa">CGPA / Grade</option>
+                            </select>
+                          )}
+                          {isUgPg && edu.marking_system === 'cgpa' ? (
+                            <div className="grid grid-cols-2 gap-1.5">
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                step="0.001"
+                                min="0"
+                                placeholder="CGPA"
+                                value={edu.cgpa}
+                                onChange={(e) => {
+                                  const updated = [...educationList];
+                                  updated[idx].cgpa = e.target.value;
+                                  setEducationList(updated);
+                                }}
+                                className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs font-mono bg-white"
+                              />
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                step="0.001"
+                                min="0"
+                                placeholder="Scale 10"
+                                value={edu.cgpa_scale}
+                                onChange={(e) => {
+                                  const updated = [...educationList];
+                                  updated[idx].cgpa_scale = e.target.value;
+                                  setEducationList(updated);
+                                }}
+                                className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs font-mono bg-white"
+                              />
+                            </div>
+                          ) : (
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              step="0.01"
+                              placeholder={lang === 'mr' ? 'उदा. ७८.५' : 'e.g. 78.5'}
+                              value={edu.percentage}
+                              onChange={(e) => {
+                                const updated = [...educationList];
+                                updated[idx].percentage = e.target.value;
+                                setEducationList(updated);
+                              }}
+                              className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-mono bg-white focus:ring-1 focus:ring-sky-500 focus:outline-none"
+                            />
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Board / University & Passing Year */}
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="col-span-2">
+                        <label className="block text-[10px] font-bold uppercase text-slate-600 mb-0.5">
+                          {isBelow10th
+                            ? (lang === 'mr' ? 'शाळेचे नाव / ठिकाण' : 'School Name / Location')
+                            : (lang === 'mr' ? 'मंडळ / विद्यापीठ / कॉलेज / शाळा' : 'Board / University / School / College')}
+                        </label>
+                        <input
+                          type="text"
+                          placeholder={
+                            isBelow10th
+                              ? (lang === 'mr' ? 'उदा. जि.प. प्राथमिक शाळा, अंबाप' : 'e.g. Z.P. School, Ambap')
+                              : (lang === 'mr' ? 'उदा. शिवाजी विद्यापीठ / पुणे बोर्ड' : 'e.g. Shivaji University / Pune Board')
+                          }
+                          value={edu.board_university}
+                          onChange={(e) => {
+                            const updated = [...educationList];
+                            updated[idx].board_university = e.target.value;
+                            setEducationList(updated);
+                          }}
+                          onBlur={(e) => {
+                            const updated = [...educationList];
+                            updated[idx].board_university = toSmartTitleCase(e.target.value);
+                            setEducationList(updated);
+                          }}
+                          className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:ring-1 focus:ring-sky-500 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-slate-600 mb-0.5">
+                          {lang === 'mr' ? 'उत्तीर्ण वर्ष' : 'Passing Year'}
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={4}
+                          placeholder={lang === 'mr' ? 'उदा. २०२२' : 'e.g. 2022'}
+                          value={edu.passing_year}
+                          onChange={(e) => {
+                            const updated = [...educationList];
+                            updated[idx].passing_year = e.target.value.replace(/\D/g, '');
+                            setEducationList(updated);
+                          }}
+                          className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-mono text-center bg-white focus:ring-1 focus:ring-sky-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Certificate / Marksheet File Upload */}
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase text-slate-600 mb-0.5">
+                        {isBelow10th
+                          ? (lang === 'mr' ? 'शाळा सोडल्याचा दाखला (LC/TC) किंवा गुणपत्रिका (ऐच्छिक)' : 'Upload LC / TC / Marksheet (Optional)')
+                          : (lang === 'mr' ? 'गुणपत्रिका / पदवी प्रमाणपत्र अपलोड करा (ऐच्छिक)' : 'Upload Marksheet / Degree Certificate (Optional)')}
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        onChange={(e) => {
+                          const updated = [...educationList];
+                          updated[idx].file = e.target.files?.[0] || null;
+                          setEducationList(updated);
+                        }}
+                        className="w-full text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[10px] file:font-semibold file:bg-slate-200 file:text-slate-800 hover:file:bg-slate-300 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* B. DESKTOP VIEW: Complete Columnar Table */}
+            <div className="hidden md:block overflow-x-auto rounded-2xl border border-slate-200 shadow-sm">
+              <table className="w-full min-w-[880px] text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                    <th className="py-3 px-3 w-40">{lang === 'mr' ? 'परीक्षा / शिक्षण स्तर' : 'Exam / Degree Level'}</th>
+                    <th className="py-3 px-3 w-48">{lang === 'mr' ? 'परीक्षा / शिक्षण स्तर' : 'Exam / Degree Level'}</th>
                     <th className="py-3 px-3">{lang === 'mr' ? 'इयत्ता / पदवी / शाखा / विषय' : 'Degree / Branch / Subject'}</th>
                     <th className="py-3 px-3">{lang === 'mr' ? 'शाळा / मंडळ / विद्यापीठ' : 'University / Board / College'}</th>
                     <th className="py-3 px-3 w-24 text-center">{lang === 'mr' ? 'वर्ष' : 'Passing Year'}</th>
                     <th className="py-3 px-3 w-44">{lang === 'mr' ? 'स्थिती / टक्केवारी (%)' : 'Status / % Grade'}</th>
+                    <th className="py-3 px-3 w-44">{lang === 'mr' ? 'दाखला / प्रमाणपत्र' : 'Certificate Upload'}</th>
+                    <th className="py-3 px-2 w-10 text-center"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -1603,6 +1871,7 @@ function OnlinePreRegistrationContent() {
                     const isPhd = edu.level.includes('Ph.D');
                     const isNetSet = edu.level.includes('NET');
                     const isUgPg = edu.level.includes('Graduation (UG)') || edu.level.includes('Post Graduation (PG)');
+                    const isCustomRow = idx >= 8;
 
                     return (
                       <tr key={idx} className="hover:bg-slate-50/80">
@@ -1612,17 +1881,22 @@ function OnlinePreRegistrationContent() {
                             type="text"
                             placeholder={
                               isBelow10th
-                                ? (lang === 'mr' ? 'उदा. ४थी / ७वी' : 'Class / Std (e.g. 7th)')
+                                ? (lang === 'mr' ? 'उदा. ४थी / ७वी / ८वी' : 'Class / Std (e.g. 7th)')
                                 : isPhd
-                                ? 'Topic / Discipline'
+                                ? (lang === 'mr' ? 'विषय / शाखा' : 'Discipline / Topic')
                                 : isNetSet
-                                ? 'Exam Name'
-                                : 'Branch / Subject'
+                                ? (lang === 'mr' ? 'परीक्षेचे नाव' : 'Exam Name')
+                                : (lang === 'mr' ? 'शाखा / विषय' : 'Branch / Subject')
                             }
                             value={edu.degree_name}
                             onChange={(e) => {
                               const updated = [...educationList];
                               updated[idx].degree_name = e.target.value;
+                              setEducationList(updated);
+                            }}
+                            onBlur={(e) => {
+                              const updated = [...educationList];
+                              updated[idx].degree_name = toSmartTitleCase(e.target.value);
                               setEducationList(updated);
                             }}
                             className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-sky-500"
@@ -1631,11 +1905,20 @@ function OnlinePreRegistrationContent() {
                         <td className="py-2.5 px-3">
                           <input
                             type="text"
-                            placeholder="Board / University"
+                            placeholder={
+                              isBelow10th
+                                ? (lang === 'mr' ? 'शाळेचे नाव व गाव' : 'School Name & Place')
+                                : (lang === 'mr' ? 'मंडळ / विद्यापीठ नाव' : 'Board / University Name')
+                            }
                             value={edu.board_university}
                             onChange={(e) => {
                               const updated = [...educationList];
                               updated[idx].board_university = e.target.value;
+                              setEducationList(updated);
+                            }}
+                            onBlur={(e) => {
+                              const updated = [...educationList];
+                              updated[idx].board_university = toSmartTitleCase(e.target.value);
                               setEducationList(updated);
                             }}
                             className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-sky-500"
@@ -1704,7 +1987,7 @@ function OnlinePreRegistrationContent() {
                                 <div className="grid grid-cols-2 gap-1">
                                   <input
                                     type="number"
-                                    step="0.01"
+                                    step="0.001"
                                     placeholder="CGPA"
                                     value={edu.cgpa}
                                     onChange={(e) => {
@@ -1712,7 +1995,7 @@ function OnlinePreRegistrationContent() {
                                       updated[idx].cgpa = e.target.value;
                                       setEducationList(updated);
                                     }}
-                                    className="w-full px-2 py-1 border border-slate-300 rounded-lg text-xs"
+                                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs"
                                   />
                                   <input
                                     type="number"
@@ -1724,14 +2007,15 @@ function OnlinePreRegistrationContent() {
                                       updated[idx].cgpa_scale = e.target.value;
                                       setEducationList(updated);
                                     }}
-                                    className="w-full px-2 py-1 border border-slate-300 rounded-lg text-xs"
+                                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs"
                                   />
                                 </div>
                               ) : (
                                 <input
                                   type="number"
+                                  inputMode="decimal"
                                   step="0.01"
-                                  placeholder="Percentage %"
+                                  placeholder="%"
                                   value={edu.percentage}
                                   onChange={(e) => {
                                     const updated = [...educationList];
@@ -1744,11 +2028,47 @@ function OnlinePreRegistrationContent() {
                             </div>
                           )}
                         </td>
+                        <td className="py-2.5 px-3">
+                          <input
+                            type="file"
+                            accept="image/*,.pdf"
+                            onChange={(e) => {
+                              const updated = [...educationList];
+                              updated[idx].file = e.target.files?.[0] || null;
+                              setEducationList(updated);
+                            }}
+                            className="text-xs text-slate-600 file:mr-1 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-[10px] file:bg-slate-200 file:text-slate-800 cursor-pointer"
+                          />
+                        </td>
+                        <td className="py-2.5 px-2 text-center">
+                          {isCustomRow && (
+                            <button
+                              type="button"
+                              onClick={() => removeEducationRow(idx)}
+                              className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded transition"
+                              title="Delete row"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
+            </div>
+
+            {/* Add More Qualification Button */}
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={addEducationRow}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-sky-300 bg-sky-50 hover:bg-sky-100 text-sky-800 text-xs font-bold transition shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                {lang === 'mr' ? '➕ अतिरिक्त शैक्षणिक पात्रता जोडा' : '➕ Add Another Qualification'}
+              </button>
             </div>
 
             <div>
@@ -2044,7 +2364,9 @@ function OnlinePreRegistrationContent() {
                   className="mt-1 h-5 w-5 rounded text-sky-700 border-slate-300 focus:ring-sky-500 cursor-pointer flex-shrink-0"
                 />
                 <span className="text-xs text-slate-700 leading-relaxed font-medium">
-                  <strong>* Candidate Declaration:</strong> I hereby certify that the information and documents submitted above are true, complete, and correct to the best of my knowledge. I understand that my pre-registration will be finalized and verified upon physical arrival and fee settlement at the Central HR Front Desk.
+                  <strong>* Candidate Declaration:</strong> {lang === 'mr'
+                    ? 'मी याद्वारे प्रमाणित करतो/करते की वर सादर केलेली सर्व माहिती व कागदपत्रे माझ्या माहितीनुसार खरी व अचूक आहेत. मला माहित आहे की मध्यवर्ती HR फ्रंट डेस्कवर प्रत्यक्ष उपस्थित राहून मूळ कागदपत्रांची पडताळणी केल्यानंतर माझी अंतिम नोंदणी पूर्ण केली जाईल.'
+                    : 'I hereby certify that the information and documents submitted above are true, complete, and correct to the best of my knowledge. I understand that my pre-registration will be finalized upon physical reporting and document verification at the Central HR Front Desk.'}
                 </span>
               </label>
             </div>
@@ -2135,11 +2457,10 @@ function OnlinePreRegistrationContent() {
             </div>
           </div>
 
-          {/* SUBMISSION ACTION WITH FEE NOTE */}
+          {/* SUBMISSION ACTION */}
           <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-7 shadow-sm border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-xs text-slate-600">
-              Application Fee: <strong className="text-emerald-700 text-sm font-mono font-bold">₹{applicationFee}</strong>{' '}
-              <span className="text-slate-500">(Payable upon physical arrival at Front Desk)</span>
+            <div className="text-xs text-slate-500 font-medium text-center sm:text-left">
+              {lang === 'mr' ? 'नोंदणी अर्ज सबमिट करण्यापूर्वी सर्व माहितीची खात्री करा.' : 'Please review and verify all information before final submission.'}
             </div>
 
             <button
